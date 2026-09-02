@@ -31,6 +31,11 @@ jobs:
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --no-install --clean
 
+      - name: Fix gradle repositories for pager-view
+        run: |
+          sed -i 's/mavenCentral()/mavenCentral()\n        gradlePluginPortal()/g' android/build.gradle
+          sed -i 's/google()/google()\n        gradlePluginPortal()/g' android/settings.gradle || true
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 

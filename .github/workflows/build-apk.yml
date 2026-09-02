@@ -35,33 +35,6 @@ jobs:
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --no-install --clean --non-interactive
 
-      - name: Nuclear wipe of Compose from pager-view
-        run: |
-          TARGET="node_modules/react-native-pager-view/android/build.gradle"
-          if [ -f "$TARGET" ]; then
-            python3 -c "
-          with open('$TARGET', 'r') as f:
-              lines = f.readlines()
-
-          filtered = []
-          skip = False
-          for line in lines:
-              if 'composeOptions {' in line or 'buildFeatures {' in line:
-                  skip = True
-                  continue
-              if skip and '}' in line:
-                  skip = False
-                  continue
-              if not skip and not any(bad in line for bad in ['org.jetbrains.kotlin.plugin.compose', 'compose-compiler', 'compose true', 'compose = true']):
-                  filtered.append(line)
-
-          with open('$TARGET', 'w') as f:
-              f.writelines(filtered)
-          "
-            echo "=== PATCHED GRADLE FILE ==="
-            cat "$TARGET"
-          fi
-
       - name: Configure Gradle Memory
         run: |
           mkdir -p ~/.gradle

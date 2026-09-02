@@ -28,6 +28,95 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Prebuild Android project
+        run: npx expo prebuild --platform android --no-install --clean --non-interactive
+
+      - name: Force Gradle dependencies resolution
+        run: |
+          mkdir -p ~/.gradle
+          cat << 'EOF' > ~/.gradle/init.gradle
+          allprojects {
+              buildscript {
+                  repositories {
+                      gradlePluginPortal()
+                      google()
+                      mavenCentral()
+                  }
+                  configurations.all {
+                      resolutionStrategy {
+                          eachDependency { DependencyResolveDetails details ->
+                              if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name == 'compose-compiler-gradle-plugin') {
+                                  details.useVersion '2.0.0'
+                              }
+                          }
+                      }
+                  }
+              }
+              repositories {
+                  gradlePluginPortal()
+                  google()
+                  mavenCentral()
+              }
+              configurations.all {
+                  resolutionStrategy {
+                      eachDependency { DependencyResolveDetails details ->
+                          if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name == 'compose-compiler-gradle-plugin') {
+                              details.useVersion '2.0.0'
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Configure Gradle Memory
+        run: |
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> ~/.gradle/gradle.properties
+          echo "org.gradle.daemon=false" >> ~/.gradle/gradle.properties
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build Release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SNotes-Release-APK
+          path: android/app/build/outputs/apk/release/*.apk
+
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --no-install --clean --non-interactive
 

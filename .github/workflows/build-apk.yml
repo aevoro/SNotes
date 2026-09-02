@@ -28,37 +28,16 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Patch react-native-pager-view repositories
+        run: |
+          PAGER_BUILD_GRADLE="node_modules/react-native-pager-view/android/build.gradle"
+          if [ -f "$PAGER_BUILD_GRADLE" ]; then
+            sed -i 's/mavenCentral()/mavenCentral()\n        gradlePluginPortal()/g' "$PAGER_BUILD_GRADLE"
+            echo "Successfully patched react-native-pager-view"
+          fi
+
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --no-install --clean
-
-      - name: Inject gradlePluginPortal via init script
-        run: |
-          mkdir -p ~/.gradle
-          cat << 'EOF' > ~/.gradle/init.gradle
-          allprojects {
-              buildscript {
-                  repositories {
-                      gradlePluginPortal()
-                      google()
-                      mavenCentral()
-                  }
-              }
-              repositories {
-                  gradlePluginPortal()
-                  google()
-                  mavenCentral()
-              }
-          }
-          settingsEvaluated { settings ->
-              settings.pluginManagement {
-                  repositories {
-                      gradlePluginPortal()
-                      google()
-                      mavenCentral()
-                  }
-              }
-          }
-          EOF
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew

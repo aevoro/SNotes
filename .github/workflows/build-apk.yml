@@ -28,23 +28,34 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Patch react-native-pager-view repositories
+      - name: Prebuild Android project
+        run: npx expo prebuild --platform android --no-install --clean --non-interactive
+
+      - name: Patch pager-view and buildscripts
         run: |
-          PAGER_BUILD_GRADLE="node_modules/react-native-pager-view/android/build.gradle"
-          if [ -f "$PAGER_BUILD_GRADLE" ]; then
-            sed -i 's/mavenCentral()/mavenCentral()\n        gradlePluginPortal()/g' "$PAGER_BUILD_GRADLE"
-            echo "Successfully patched react-native-pager-view"
+          # 1. Добавляем репозитории в корневой build.gradle
+          sed -i 's/mavenCentral()/mavenCentral()\n        gradlePluginPortal()/g' android/build.gradle
+
+          # 2. Исправляем pager-view (добавляем портал плагинов и заменяем версию)
+          PAGER_BUILD="node_modules/react-native-pager-view/android/build.gradle"
+          if [ -f "$PAGER_BUILD" ]; then
+            sed -i 's/mavenCentral()/mavenCentral()\n        gradlePluginPortal()/g' "$PAGER_BUILD"
+            sed -i 's/compose-compiler-gradle-plugin:.*"/compose-compiler-gradle-plugin:2.0.0"/g' "$PAGER_BUILD"
+            sed -i "s/compose-compiler-gradle-plugin:.*'/compose-compiler-gradle-plugin:2.0.0'/g" "$PAGER_BUILD"
           fi
 
-      - name: Prebuild Android project
-        run: npx expo prebuild --platform android --no-install --clean
+      - name: Configure Gradle Memory
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> ~/.gradle/gradle.properties
+          echo "org.gradle.daemon=false" >> ~/.gradle/gradle.properties
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
       - name: Build Release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

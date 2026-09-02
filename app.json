@@ -13,10 +13,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/adaptive-icon.png"",
         "backgroundColor": "#0f0f11"
       },
-      "package": "com.snotes.app"
+      "package": "com.aevoroo.snotes"
     },
     "extra": {
       "eas": {

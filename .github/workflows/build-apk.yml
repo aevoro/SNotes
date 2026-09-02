@@ -28,57 +28,27 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Sanitize and verify app.json
+      - name: Sanitize app.json
         run: |
-          # Автоматически убираем сдвоенные кавычки, если они есть
           sed -i 's/""/"/g' app.json
-          echo "=== VERIFIED APP.JSON CONTENT ==="
-          cat app.json
-          echo "================================="
 
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --no-install --clean --non-interactive
 
-      - name: Force Gradle dependencies resolution
+      - name: Completely disable Compose in pager-view
         run: |
-          mkdir -p ~/.gradle
-          cat << 'EOF' > ~/.gradle/init.gradle
-          allprojects {
-              buildscript {
-                  repositories {
-                      gradlePluginPortal()
-                      google()
-                      mavenCentral()
-                  }
-                  configurations.all {
-                      resolutionStrategy {
-                          eachDependency { DependencyResolveDetails details ->
-                              if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name == 'compose-compiler-gradle-plugin') {
-                                  details.useVersion '2.0.0'
-                              }
-                          }
-                      }
-                  }
-              }
-              repositories {
-                  gradlePluginPortal()
-                  google()
-                  mavenCentral()
-              }
-              configurations.all {
-                  resolutionStrategy {
-                      eachDependency { DependencyResolveDetails details ->
-                          if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name == 'compose-compiler-gradle-plugin') {
-                              details.useVersion '2.0.0'
-                          }
-                      }
-                  }
-              }
-          }
-          EOF
+          PAGER_GRADLE="node_modules/react-native-pager-view/android/build.gradle"
+          if [ -f "$PAGER_GRADLE" ]; then
+            # Выключаем compose buildFeatures
+            sed -i 's/compose true/compose false/g' "$PAGER_GRADLE"
+            # Удаляем плагин compose
+            sed -i '/org.jetbrains.kotlin.plugin.compose/d' "$PAGER_GRADLE"
+            sed -i '/compose-compiler-gradle-plugin/d' "$PAGER_GRADLE"
+          fi
 
       - name: Configure Gradle Memory
         run: |
+          mkdir -p ~/.gradle
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> ~/.gradle/gradle.properties
           echo "org.gradle.daemon=false" >> ~/.gradle/gradle.properties
 

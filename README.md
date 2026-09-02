@@ -1,10 +1,6 @@
 # SNotes (Android)
 
 <p align="center">
-  <img src="assets/images/icon.png" alt="SNotes Logo" width="120" height="120" style="border-radius: 26px;" />
-</p>
-
-<p align="center">
   <b>Android-приложение для заметок, расписания занятий и контроля задач, разработанное для студентов.</b>
 </p>
 

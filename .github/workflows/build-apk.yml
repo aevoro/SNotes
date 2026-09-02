@@ -35,20 +35,48 @@ jobs:
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --no-install --clean --non-interactive
 
-      - name: Completely disable Compose in pager-view
+      - name: Force Kotlin Compose dependencies to 2.0.0
         run: |
-          PAGER_GRADLE="node_modules/react-native-pager-view/android/build.gradle"
-          if [ -f "$PAGER_GRADLE" ]; then
-            # Выключаем compose buildFeatures
-            sed -i 's/compose true/compose false/g' "$PAGER_GRADLE"
-            # Удаляем плагин compose
-            sed -i '/org.jetbrains.kotlin.plugin.compose/d' "$PAGER_GRADLE"
-            sed -i '/compose-compiler-gradle-plugin/d' "$PAGER_GRADLE"
-          fi
+          mkdir -p ~/.gradle
+          cat << 'EOF' > ~/.gradle/init.gradle
+          allprojects {
+              configurations.all {
+                  resolutionStrategy {
+                      eachDependency { DependencyResolveDetails details ->
+                          if (details.requested.group == 'org.jetbrains.kotlin' &&
+                              (details.requested.name.contains('compose-compiler') || details.requested.name.contains('compose'))) {
+                              details.useVersion '2.0.0'
+                          }
+                      }
+                  }
+              }
+              buildscript {
+                  repositories {
+                      gradlePluginPortal()
+                      google()
+                      mavenCentral()
+                  }
+                  configurations.all {
+                      resolutionStrategy {
+                          eachDependency { DependencyResolveDetails details ->
+                              if (details.requested.group == 'org.jetbrains.kotlin' &&
+                                  (details.requested.name.contains('compose-compiler') || details.requested.name.contains('compose'))) {
+                                  details.useVersion '2.0.0'
+                              }
+                          }
+                      }
+                  }
+              }
+              repositories {
+                  gradlePluginPortal()
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
 
       - name: Configure Gradle Memory
         run: |
-          mkdir -p ~/.gradle
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> ~/.gradle/gradle.properties
           echo "org.gradle.daemon=false" >> ~/.gradle/gradle.properties
 

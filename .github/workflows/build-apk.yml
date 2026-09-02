@@ -31,10 +31,34 @@ jobs:
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --no-install --clean
 
-      - name: Fix gradle repositories for pager-view
+      - name: Inject gradlePluginPortal via init script
         run: |
-          sed -i 's/mavenCentral()/mavenCentral()\n        gradlePluginPortal()/g' android/build.gradle
-          sed -i 's/google()/google()\n        gradlePluginPortal()/g' android/settings.gradle || true
+          mkdir -p ~/.gradle
+          cat << 'EOF' > ~/.gradle/init.gradle
+          allprojects {
+              buildscript {
+                  repositories {
+                      gradlePluginPortal()
+                      google()
+                      mavenCentral()
+                  }
+              }
+              repositories {
+                  gradlePluginPortal()
+                  google()
+                  mavenCentral()
+              }
+          }
+          settingsEvaluated { settings ->
+              settings.pluginManagement {
+                  repositories {
+                      gradlePluginPortal()
+                      google()
+                      mavenCentral()
+                  }
+              }
+          }
+          EOF
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew

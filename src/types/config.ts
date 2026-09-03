@@ -14,6 +14,6 @@ export interface AppConfig {
 
 export const DEFAULT_CONFIG: AppConfig = {
   initialScreen: 'Schedule',
-  defaultDurationMinutes: 95,
+  defaultDurationMinutes: 85,
   timeSlots: [],
 };

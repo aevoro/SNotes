@@ -4,25 +4,22 @@
     "slug": "snotes",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/snotes_icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/icon.png",
+      "image": "./assets/images/snotes_icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0f0f11"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/snotes_icon.png",
+        "backgroundColor": "#0f0f11"
       },
-      "package": "com.aevoroo.snotes"
+      "package": "com.snotes.app"
     },
-    "extra": {
-      "eas": {
-        "projectId": "ca1e9c0e-519e-4af4-8474-c5a0dae47688"
-      }
-    },
-    "owner": "aevor0"
+    "web": {
+      "favicon": "./assets/images/snotes_icon.png"
+    }
   }
 }

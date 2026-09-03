@@ -7,13 +7,13 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Pressable,
 } from 'react-native';
 import { useAppTheme } from '../../context/ThemeContext';
+import { useConfig } from '../../context/ConfigContext';
 import { loadData, saveData, KEYS } from '../../src/services/storage';
+import { LessonType, LESSON_COLORS, WeekType } from '../../src/types/schedule';
 
 export type WeekNumber = 1 | 2;
-export type LessonType = 'Лекция' | 'Практика' | 'Лабораторная';
 
 export interface Lesson {
   id: string;
@@ -21,6 +21,7 @@ export interface Lesson {
   subject: string;
   type: LessonType;
   room: string;
+  startTime?: string;
 }
 
 export type ScheduleStore = Record<WeekNumber, Record<number, Lesson[]>>;
@@ -28,60 +29,116 @@ export type ScheduleStore = Record<WeekNumber, Record<number, Lesson[]>>;
 const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const LESSON_TYPES: LessonType[] = ['Лекция', 'Практика', 'Лабораторная'];
 
-// Полностью пустая структура для обеих недель
 const EMPTY_SCHEDULE: ScheduleStore = {
   1: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [] },
   2: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [] },
 };
 
+// Функция извлечения времени для сортировки (например из "08:00 - 09:35" -> "08:00")
+const getStartTimeForSort = (lesson: Lesson): string => {
+  if (lesson.startTime) return lesson.startTime;
+  if (!lesson.time) return '99:99';
+  const match = lesson.time.match(/(\d{1,2}:\d{2})/);
+  return match ? match[1].padStart(5, '0') : lesson.time;
+};
+
+// Сортировка списка пар по времени
+const sortLessons = (lessons: Lesson[]): Lesson[] => {
+  return [...lessons].sort((a, b) => getStartTimeForSort(a).localeCompare(getStartTimeForSort(b)));
+};
+
 export default function ScheduleScreen() {
   const { theme, isScheduleEditable } = useAppTheme();
+  const { config } = useConfig();
+
   const [schedule, setSchedule] = useState<ScheduleStore>(EMPTY_SCHEDULE);
   const [numberOfWeek, setNumberOfWeek] = useState<WeekNumber>(1);
   const [selectedDay, setSelectedDay] = useState(0);
 
+  // Модалка создания / редактирования
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [subject, setSubject] = useState('');
   const [time, setTime] = useState('');
   const [room, setRoom] = useState('');
   const [lessonType, setLessonType] = useState<LessonType>('Лекция');
+  const [targetWeek, setTargetWeek] = useState<WeekType>(1);
 
   useEffect(() => {
     loadData<ScheduleStore>(KEYS.SCHEDULE, EMPTY_SCHEDULE).then((loaded) => {
       if (loaded && loaded[1] && loaded[2]) {
-        setSchedule(loaded);
+        // Гарантируем сортировку при загрузке
+        const sortedStore: ScheduleStore = { 1: {}, 2: {} };
+        [1, 2].forEach((w) => {
+          const wNum = w as WeekNumber;
+          sortedStore[wNum] = {};
+          [0, 1, 2, 3, 4, 5].forEach((d) => {
+            sortedStore[wNum][d] = sortLessons(loaded[wNum]?.[d] || []);
+          });
+        });
+        setSchedule(sortedStore);
       } else {
         setSchedule(EMPTY_SCHEDULE);
       }
     });
   }, []);
 
-  const handleAddLesson = async () => {
-    if (!subject.trim()) return;
-
-    const newLesson: Lesson = {
-      id: Date.now().toString(),
-      subject: subject.trim(),
-      time: time.trim() || 'Пара',
-      room: room.trim() || '—',
-      type: lessonType,
-    };
-
-    const currentDayLessons = schedule[numberOfWeek]?.[selectedDay] || [];
-    const updated: ScheduleStore = {
-      ...schedule,
-      [numberOfWeek]: {
-        ...(schedule[numberOfWeek] || {}),
-        [selectedDay]: [...currentDayLessons, newLesson],
-      },
-    };
-
-    setSchedule(updated);
-    await saveData(KEYS.SCHEDULE, updated);
-
+  const openCreateModal = () => {
+    setEditingLessonId(null);
     setSubject('');
     setTime('');
     setRoom('');
+    setLessonType('Лекция');
+    setTargetWeek(numberOfWeek);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (lesson: Lesson) => {
+    if (!isScheduleEditable) return;
+    setEditingLessonId(lesson.id);
+    setSubject(lesson.subject);
+    setTime(lesson.time);
+    setRoom(lesson.room || '');
+    setLessonType(lesson.type);
+    setTargetWeek(numberOfWeek);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveLesson = async () => {
+    if (!subject.trim()) return;
+
+    const lessonId = editingLessonId || Date.now().toString();
+    const startTimeVal = getStartTimeForSort({ id: '', subject: '', type: 'Лекция', room: '', time: time.trim() });
+
+    const newLesson: Lesson = {
+      id: lessonId,
+      subject: subject.trim(),
+      time: time.trim() || '08:00 - 09:35',
+      room: room.trim() || '—',
+      type: lessonType,
+      startTime: startTimeVal,
+    };
+
+    let updated: ScheduleStore = { ...schedule };
+
+    if (editingLessonId) {
+      // Обновление существующей пары
+      const currentDayLessons = updated[numberOfWeek]?.[selectedDay] || [];
+      const nextDayLessons = currentDayLessons.map((l) => (l.id === editingLessonId ? newLesson : l));
+      updated[numberOfWeek][selectedDay] = sortLessons(nextDayLessons);
+    } else {
+      // Добавление новой
+      const targetWeeksToAdd: WeekNumber[] = targetWeek === 'both' ? [1, 2] : [(targetWeek as WeekNumber)];
+
+      targetWeeksToAdd.forEach((w) => {
+        const currentDayLessons = updated[w]?.[selectedDay] || [];
+        const nextDayLessons = [...currentDayLessons, newLesson];
+        updated[w][selectedDay] = sortLessons(nextDayLessons);
+      });
+    }
+
+    setSchedule(updated);
+    await saveData(KEYS.SCHEDULE, updated);
     setIsModalOpen(false);
   };
 
@@ -97,6 +154,13 @@ export default function ScheduleScreen() {
 
     setSchedule(updated);
     await saveData(KEYS.SCHEDULE, updated);
+    if (isModalOpen && editingLessonId === id) {
+      setIsModalOpen(false);
+    }
+  };
+
+  const selectTimeSlot = (slot: { startTime: string; endTime: string }) => {
+    setTime(`${slot.startTime} - ${slot.endTime}`);
   };
 
   const currentLessons = schedule[numberOfWeek]?.[selectedDay] || [];
@@ -178,35 +242,50 @@ export default function ScheduleScreen() {
             </Text>
           </View>
         ) : (
-          currentLessons.map((item) => (
-            <View
-              key={item.id}
-              style={[
-                styles.lessonCard,
-                { backgroundColor: theme.card, borderColor: theme.border },
-              ]}>
-              <View style={[styles.timeBlock, { borderRightColor: theme.border }]}>
-                <Text style={[styles.timeText, { color: theme.textPrimary }]}>{item.time}</Text>
-                <View style={[styles.typeBadge, { backgroundColor: theme.pillBg }]}>
-                  <Text style={[styles.typeText, { color: theme.accent }]}>{item.type}</Text>
+          currentLessons.map((item) => {
+            const colorConfig = LESSON_COLORS[item.type] || LESSON_COLORS['Лекция'];
+            const cardBg = theme.mode === 'dark' ? colorConfig.bgDark : colorConfig.bgLight;
+            const badgeBg = theme.mode === 'dark' ? colorConfig.badgeBgDark : colorConfig.badgeBgLight;
+            const textColor = theme.mode === 'dark' ? colorConfig.textDark : colorConfig.textLight;
+
+            return (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={isScheduleEditable ? 0.7 : 1}
+                onPress={() => openEditModal(item)}
+                style={[
+                  styles.lessonCard,
+                  {
+                    backgroundColor: cardBg,
+                    borderLeftColor: colorConfig.border,
+                    borderRightColor: theme.border,
+                    borderTopColor: theme.border,
+                    borderBottomColor: theme.border,
+                  },
+                ]}>
+                <View style={[styles.timeBlock, { borderRightColor: theme.border }]}>
+                  <Text style={[styles.timeText, { color: theme.textPrimary }]}>{item.time}</Text>
+                  <View style={[styles.typeBadge, { backgroundColor: badgeBg }]}>
+                    <Text style={[styles.typeText, { color: textColor }]}>{item.type}</Text>
+                  </View>
                 </View>
-              </View>
 
-              <View style={styles.infoBlock}>
-                <Text style={[styles.subjectText, { color: theme.textPrimary }]}>{item.subject}</Text>
-                <Text style={[styles.roomText, { color: theme.textSecondary }]}>Ауд. {item.room}</Text>
-              </View>
+                <View style={styles.infoBlock}>
+                  <Text style={[styles.subjectText, { color: theme.textPrimary }]}>{item.subject}</Text>
+                  <Text style={[styles.roomText, { color: theme.textSecondary }]}>Ауд. {item.room}</Text>
+                </View>
 
-              {isScheduleEditable && (
-                <TouchableOpacity
-                  onPress={() => handleDeleteLesson(item.id)}
-                  hitSlop={10}
-                  style={styles.deleteBtn}>
-                  <Text style={{ color: '#ef4444', fontSize: 16 }}>✕</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))
+                {isScheduleEditable && (
+                  <TouchableOpacity
+                    onPress={() => handleDeleteLesson(item.id)}
+                    hitSlop={10}
+                    style={styles.deleteBtn}>
+                    <Text style={{ color: '#ef4444', fontSize: 16 }}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+            );
+          })
         )}
       </ScrollView>
 
@@ -215,7 +294,7 @@ export default function ScheduleScreen() {
         <TouchableOpacity
           style={[styles.fab, { backgroundColor: theme.accent }]}
           activeOpacity={0.85}
-          onPress={() => setIsModalOpen(true)}>
+          onPress={openCreateModal}>
           <View style={styles.plusContainer}>
             <View style={styles.plusHorizontal} />
             <View style={styles.plusVertical} />
@@ -223,82 +302,158 @@ export default function ScheduleScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Модалка добавления пары */}
+      {/* Модалка добавления / редактирования пары */}
       <Modal visible={isModalOpen} transparent animationType="fade" onRequestClose={() => setIsModalOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setIsModalOpen(false)}>
-          <Pressable style={[styles.modalSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
-              Пара ({numberOfWeek}-я неделя, {DAYS[selectedDay]})
-            </Text>
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setIsModalOpen(false)}
+          />
+          <View style={[styles.modalSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
+                {editingLessonId ? 'Редактировать пару' : `Новая пара (${DAYS[selectedDay]})`}
+              </Text>
 
-            <TextInput
-              placeholder="Название предмета..."
-              placeholderTextColor={theme.textSecondary}
-              value={subject}
-              onChangeText={setSubject}
-              style={[
-                styles.modalInput,
-                { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9', color: theme.textPrimary },
-              ]}
-            />
+              {!editingLessonId && (
+                <>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Добавить на неделю:</Text>
+                  <View style={styles.targetWeekRow}>
+                    <TouchableOpacity
+                      onPress={() => setTargetWeek(1)}
+                      style={[
+                        styles.targetWeekBtn,
+                        { borderColor: theme.border },
+                        targetWeek === 1 && { backgroundColor: theme.pillBg, borderColor: theme.accent },
+                      ]}>
+                      <Text style={[styles.targetWeekText, { color: targetWeek === 1 ? theme.accent : theme.textSecondary }]}>
+                        1-я неделя
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setTargetWeek(2)}
+                      style={[
+                        styles.targetWeekBtn,
+                        { borderColor: theme.border },
+                        targetWeek === 2 && { backgroundColor: theme.pillBg, borderColor: theme.accent },
+                      ]}>
+                      <Text style={[styles.targetWeekText, { color: targetWeek === 2 ? theme.accent : theme.textSecondary }]}>
+                        2-я неделя
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setTargetWeek('both')}
+                      style={[
+                        styles.targetWeekBtn,
+                        { borderColor: theme.border },
+                        targetWeek === 'both' && { backgroundColor: theme.pillBg, borderColor: theme.accent },
+                      ]}>
+                      <Text style={[styles.targetWeekText, { color: targetWeek === 'both' ? theme.accent : theme.textSecondary }]}>
+                        Обе недели
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
 
-            <TextInput
-              placeholder="Время (напр. 08:30 - 10:05)"
-              placeholderTextColor={theme.textSecondary}
-              value={time}
-              onChangeText={setTime}
-              style={[
-                styles.modalInput,
-                { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9', color: theme.textPrimary },
-              ]}
-            />
+              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Предмет</Text>
+              <TextInput
+                placeholder="Название предмета..."
+                placeholderTextColor={theme.textSecondary}
+                value={subject}
+                onChangeText={setSubject}
+                style={[
+                  styles.modalInput,
+                  { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9', color: theme.textPrimary },
+                ]}
+              />
 
-            <TextInput
-              placeholder="Аудитория (напр. 312-1)"
-              placeholderTextColor={theme.textSecondary}
-              value={room}
-              onChangeText={setRoom}
-              style={[
-                styles.modalInput,
-                { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9', color: theme.textPrimary },
-              ]}
-            />
-
-            <View style={styles.typeSelectorRow}>
-              {LESSON_TYPES.map((t) => (
-                <TouchableOpacity
-                  key={t}
-                  onPress={() => setLessonType(t)}
-                  style={[
-                    styles.typeSelectorBtn,
-                    { borderColor: theme.border },
-                    lessonType === t && { backgroundColor: theme.pillBg, borderColor: theme.accent },
-                  ]}>
-                  <Text
+              {/* Быстрые слоты времени из настроек */}
+              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Быстрый выбор времени (звонки):</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickTimeScroll}>
+                {config.timeSlots.map((slot) => (
+                  <TouchableOpacity
+                    key={slot.lessonNumber}
+                    onPress={() => selectTimeSlot(slot)}
                     style={[
-                      styles.typeSelectorText,
-                      { color: lessonType === t ? theme.accent : theme.textSecondary },
+                      styles.quickTimeChip,
+                      { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#e2e8f0', borderColor: theme.border },
                     ]}>
-                    {t}
+                    <Text style={[styles.quickTimeText, { color: theme.textPrimary }]}>
+                      №{slot.lessonNumber}: {slot.startTime}-{slot.endTime}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Время занятий</Text>
+              <TextInput
+                placeholder="Время (напр. 08:00 - 09:35)"
+                placeholderTextColor={theme.textSecondary}
+                value={time}
+                onChangeText={setTime}
+                style={[
+                  styles.modalInput,
+                  { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9', color: theme.textPrimary },
+                ]}
+              />
+
+              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Аудитория</Text>
+              <TextInput
+                placeholder="Аудитория (напр. 312-1)"
+                placeholderTextColor={theme.textSecondary}
+                value={room}
+                onChangeText={setRoom}
+                style={[
+                  styles.modalInput,
+                  { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9', color: theme.textPrimary },
+                ]}
+              />
+
+              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Тип занятия</Text>
+              <View style={styles.typeSelectorRow}>
+                {LESSON_TYPES.map((t) => {
+                  const isSel = lessonType === t;
+                  const col = LESSON_COLORS[t];
+                  return (
+                    <TouchableOpacity
+                      key={t}
+                      onPress={() => setLessonType(t)}
+                      style={[
+                        styles.typeSelectorBtn,
+                        { borderColor: col.border },
+                        isSel && { backgroundColor: theme.mode === 'dark' ? col.bgDark : col.bgLight },
+                      ]}>
+                      <Text
+                        style={[
+                          styles.typeSelectorText,
+                          { color: isSel ? (theme.mode === 'dark' ? col.textDark : col.textLight) : theme.textSecondary },
+                        ]}>
+                        {t}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  onPress={() => setIsModalOpen(false)}
+                  style={[styles.modalBtn, { backgroundColor: theme.surface }]}>
+                  <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>Отмена</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSaveLesson}
+                  style={[styles.modalBtn, { backgroundColor: theme.accent }]}>
+                  <Text style={{ color: '#ffffff', fontWeight: '700' }}>
+                    {editingLessonId ? 'Сохранить' : 'Добавить'}
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                onPress={() => setIsModalOpen(false)}
-                style={[styles.modalBtn, { backgroundColor: theme.surface }]}>
-                <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>Отмена</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleAddLesson}
-                style={[styles.modalBtn, { backgroundColor: theme.accent }]}>
-                <Text style={{ color: '#ffffff', fontWeight: '700' }}>Добавить</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -315,14 +470,22 @@ const styles = StyleSheet.create({
   list: { padding: 16, paddingBottom: 100 },
   empty: { marginTop: 60, alignItems: 'center', paddingHorizontal: 32 },
   emptyText: { fontSize: 16 },
-  lessonCard: { flexDirection: 'row', padding: 16, borderRadius: 14, marginBottom: 12, borderWidth: 1, alignItems: 'center' },
+  lessonCard: {
+    flexDirection: 'row',
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderLeftWidth: 6,
+    alignItems: 'center',
+  },
   timeBlock: { width: 105, borderRightWidth: 1, paddingRight: 10 },
-  timeText: { fontSize: 12.5, fontWeight: '700', marginBottom: 6 },
-  typeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' },
+  timeText: { fontSize: 12, fontWeight: '700', marginBottom: 6 },
+  typeBadge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start' },
   typeText: { fontSize: 11, fontWeight: '700' },
   infoBlock: { flex: 1, paddingLeft: 12, justifyContent: 'center' },
   subjectText: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
-  roomText: { fontSize: 13 },
+  roomText: { fontSize: 12.5 },
   deleteBtn: { padding: 6, marginLeft: 8 },
   fab: {
     position: 'absolute',
@@ -343,12 +506,19 @@ const styles = StyleSheet.create({
   plusHorizontal: { position: 'absolute', width: 18, height: 2.5, backgroundColor: '#ffffff', borderRadius: 2 },
   plusVertical: { position: 'absolute', width: 2.5, height: 18, backgroundColor: '#ffffff', borderRadius: 2 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalSheet: { width: '100%', maxWidth: 360, borderRadius: 20, padding: 20, borderWidth: 1 },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
-  modalInput: { height: 44, borderRadius: 10, paddingHorizontal: 12, marginBottom: 12, fontSize: 14 },
+  modalSheet: { width: '100%', maxWidth: 360, maxHeight: 560, borderRadius: 20, padding: 20, borderWidth: 1, zIndex: 2 },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 14, textAlign: 'center' },
+  fieldLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 0.5 },
+  targetWeekRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
+  targetWeekBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
+  targetWeekText: { fontSize: 11, fontWeight: '600' },
+  modalInput: { height: 42, borderRadius: 10, paddingHorizontal: 12, marginBottom: 12, fontSize: 14 },
+  quickTimeScroll: { marginBottom: 12, flexDirection: 'row' },
+  quickTimeChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, marginRight: 6, borderWidth: 1 },
+  quickTimeText: { fontSize: 11, fontWeight: '600' },
   typeSelectorRow: { flexDirection: 'row', gap: 6, marginBottom: 16 },
-  typeSelectorBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center', borderWidth: 1 },
-  typeSelectorText: { fontSize: 12, fontWeight: '600' },
-  modalActions: { flexDirection: 'row', gap: 10 },
+  typeSelectorBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center', borderWidth: 1.5 },
+  typeSelectorText: { fontSize: 11.5, fontWeight: '700' },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
   modalBtn: { flex: 1, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
 });

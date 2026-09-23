@@ -76,7 +76,7 @@ export default function TabLayout() {
   useEffect(() => {
     const autoCheckUpdates = async () => {
       try {
-        const repo = config.githubRepo || 'aevoroo/SNotes';
+        const repo = config.githubRepo || 'aevoro/SNotes';
         const res = await checkGitHubUpdate(CURRENT_APP_VERSION, repo);
         if (res.hasUpdate) {
           setUpdateInfo(res);
@@ -301,7 +301,7 @@ export default function TabLayout() {
     setIsCheckingUpdate(true);
     setUpdateStatusMsg(null);
     try {
-      const res = await checkGitHubUpdate(CURRENT_APP_VERSION, config.githubRepo || 'aevoroo/SNotes');
+      const res = await checkGitHubUpdate(CURRENT_APP_VERSION, config.githubRepo || 'aevoro/SNotes');
       if (res.hasUpdate) {
         setUpdateInfo(res);
         setIsUpdateModalOpen(true);

@@ -29,7 +29,7 @@ export const isNewerVersion = (latest: string, current: string): boolean => {
 // Проверка наличия релизов в GitHub
 export const checkGitHubUpdate = async (
   currentVersion: string = '1.0.1',
-  repoSlug: string = 'aevoroo/SNotes'
+  repoSlug: string = 'aevoro/SNotes'
 ): Promise<UpdateInfo> => {
   try {
     const response = await fetch(`https://api.github.com/repos/${repoSlug}/releases/latest`, {

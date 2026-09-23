@@ -45,5 +45,5 @@ export const DEFAULT_CONFIG: AppConfig = {
   notificationsEnabled: true,
   notificationLeadMinutes: 10,
   twoWeeksEnabled: true,
-  githubRepo: 'aevoroo/SNotes',
+  githubRepo: 'aevoro/SNotes',
 };

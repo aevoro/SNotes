@@ -7,11 +7,18 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  BackHandler,
 } from 'react-native';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useConfig } from '../../context/ConfigContext';
 import { loadData, saveData, KEYS } from '../../src/services/storage';
-import { LessonType, LESSON_COLORS, WeekType } from '../../src/types/schedule';
+import { LessonType, WeekType, getLessonStyleConfig } from '../../src/types/schedule';
+import {
+  getCurrentDayIndex,
+  getCurrentWeekNumber,
+  isLessonCurrentlyActive,
+} from '../../src/utils/scheduleUtils';
+import { scheduleLessonNotifications } from '../../src/services/notificationService';
 
 export type WeekNumber = 1 | 2;
 
@@ -42,7 +49,7 @@ const getStartTimeForSort = (lesson: Lesson): string => {
   return match ? match[1].padStart(5, '0') : lesson.time;
 };
 
-// Сортировка списка пар по времени
+// Сортировка списка занятий по времени
 const sortLessons = (lessons: Lesson[]): Lesson[] => {
   return [...lessons].sort((a, b) => getStartTimeForSort(a).localeCompare(getStartTimeForSort(b)));
 };
@@ -50,10 +57,15 @@ const sortLessons = (lessons: Lesson[]): Lesson[] => {
 export default function ScheduleScreen() {
   const { theme, isScheduleEditable } = useAppTheme();
   const { config } = useConfig();
+  const isTwoWeeks = config.twoWeeksEnabled !== false;
 
+  // Автосинхронизация дня недели и номера недели с системным временем устройства
   const [schedule, setSchedule] = useState<ScheduleStore>(EMPTY_SCHEDULE);
-  const [numberOfWeek, setNumberOfWeek] = useState<WeekNumber>(1);
-  const [selectedDay, setSelectedDay] = useState(0);
+  const [numberOfWeek, setNumberOfWeek] = useState<WeekNumber>(getCurrentWeekNumber());
+  const [selectedDay, setSelectedDay] = useState<number>(getCurrentDayIndex());
+
+  // Текущее время устройства (обновляется раз в 30 секунд для подсветки текущего занятия)
+  const [tick, setTick] = useState<number>(Date.now());
 
   // Модалка создания / редактирования
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -64,10 +76,29 @@ export default function ScheduleScreen() {
   const [lessonType, setLessonType] = useState<LessonType>('Лекция');
   const [targetWeek, setTargetWeek] = useState<WeekType>(1);
 
+  // Обновление таймера каждую минуту
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick(Date.now());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // BackHandler для закрытия модалки занятия
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const onBackPress = () => {
+      setIsModalOpen(false);
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [isModalOpen]);
+
+  // Загрузка расписания
   useEffect(() => {
     loadData<ScheduleStore>(KEYS.SCHEDULE, EMPTY_SCHEDULE).then((loaded) => {
       if (loaded && loaded[1] && loaded[2]) {
-        // Гарантируем сортировку при загрузке
         const sortedStore: ScheduleStore = { 1: {}, 2: {} };
         [1, 2].forEach((w) => {
           const wNum = w as WeekNumber;
@@ -77,11 +108,17 @@ export default function ScheduleScreen() {
           });
         });
         setSchedule(sortedStore);
+        // Запланировать уведомления
+        if (config.notificationsEnabled) {
+          scheduleLessonNotifications(sortedStore, config.notificationLeadMinutes || 10, true, isTwoWeeks);
+        }
       } else {
         setSchedule(EMPTY_SCHEDULE);
       }
     });
-  }, []);
+  }, [config.notificationsEnabled, config.notificationLeadMinutes, config.twoWeeksEnabled]);
+
+  const activeWeek: WeekNumber = isTwoWeeks ? numberOfWeek : 1;
 
   const openCreateModal = () => {
     setEditingLessonId(null);
@@ -89,7 +126,7 @@ export default function ScheduleScreen() {
     setTime('');
     setRoom('');
     setLessonType('Лекция');
-    setTargetWeek(numberOfWeek);
+    setTargetWeek(activeWeek);
     setIsModalOpen(true);
   };
 
@@ -100,7 +137,7 @@ export default function ScheduleScreen() {
     setTime(lesson.time);
     setRoom(lesson.room || '');
     setLessonType(lesson.type);
-    setTargetWeek(numberOfWeek);
+    setTargetWeek(activeWeek);
     setIsModalOpen(true);
   };
 
@@ -122,13 +159,17 @@ export default function ScheduleScreen() {
     let updated: ScheduleStore = { ...schedule };
 
     if (editingLessonId) {
-      // Обновление существующей пары
-      const currentDayLessons = updated[numberOfWeek]?.[selectedDay] || [];
+      // Обновление существующего занятия
+      const currentDayLessons = updated[activeWeek]?.[selectedDay] || [];
       const nextDayLessons = currentDayLessons.map((l) => (l.id === editingLessonId ? newLesson : l));
-      updated[numberOfWeek][selectedDay] = sortLessons(nextDayLessons);
+      updated[activeWeek][selectedDay] = sortLessons(nextDayLessons);
     } else {
       // Добавление новой
-      const targetWeeksToAdd: WeekNumber[] = targetWeek === 'both' ? [1, 2] : [(targetWeek as WeekNumber)];
+      const targetWeeksToAdd: WeekNumber[] = !isTwoWeeks
+        ? [1]
+        : targetWeek === 'both'
+        ? [1, 2]
+        : [(targetWeek as WeekNumber)];
 
       targetWeeksToAdd.forEach((w) => {
         const currentDayLessons = updated[w]?.[selectedDay] || [];
@@ -139,21 +180,30 @@ export default function ScheduleScreen() {
 
     setSchedule(updated);
     await saveData(KEYS.SCHEDULE, updated);
+
+    // Обновляем запланированные уведомления
+    if (config.notificationsEnabled) {
+      scheduleLessonNotifications(updated, config.notificationLeadMinutes || 10, true, isTwoWeeks);
+    }
+
     setIsModalOpen(false);
   };
 
   const handleDeleteLesson = async (id: string) => {
-    const currentDayLessons = schedule[numberOfWeek]?.[selectedDay] || [];
+    const currentDayLessons = schedule[activeWeek]?.[selectedDay] || [];
     const updated: ScheduleStore = {
       ...schedule,
-      [numberOfWeek]: {
-        ...schedule[numberOfWeek],
+      [activeWeek]: {
+        ...schedule[activeWeek],
         [selectedDay]: currentDayLessons.filter((l) => l.id !== id),
       },
     };
 
     setSchedule(updated);
     await saveData(KEYS.SCHEDULE, updated);
+    if (config.notificationsEnabled) {
+      scheduleLessonNotifications(updated, config.notificationLeadMinutes || 10, true, isTwoWeeks);
+    }
     if (isModalOpen && editingLessonId === id) {
       setIsModalOpen(false);
     }
@@ -163,49 +213,56 @@ export default function ScheduleScreen() {
     setTime(`${slot.startTime} - ${slot.endTime}`);
   };
 
-  const currentLessons = schedule[numberOfWeek]?.[selectedDay] || [];
+  const currentLessons = schedule[activeWeek]?.[selectedDay] || [];
+  const systemTodayIndex = getCurrentDayIndex();
+  const systemWeekNum = getCurrentWeekNumber();
+  const isViewingToday = selectedDay === systemTodayIndex && (!isTwoWeeks || numberOfWeek === systemWeekNum);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      {/* 1-я неделя / 2-я неделя */}
-      <View style={[styles.weekToggleContainer, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-        <TouchableOpacity
-          style={[
-            styles.weekButton,
-            { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9' },
-            numberOfWeek === 1 && { backgroundColor: theme.accent },
-          ]}
-          onPress={() => setNumberOfWeek(1)}>
-          <Text
+      {/* 1-я неделя / 2-я неделя (если включено разделение) */}
+      {isTwoWeeks && (
+        <View style={[styles.weekToggleContainer, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+          <TouchableOpacity
             style={[
-              styles.weekButtonText,
-              { color: numberOfWeek === 1 ? '#ffffff' : theme.textSecondary },
-            ]}>
-            1-я неделя
-          </Text>
-        </TouchableOpacity>
+              styles.weekButton,
+              { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9' },
+              numberOfWeek === 1 && { backgroundColor: theme.accent },
+            ]}
+            onPress={() => setNumberOfWeek(1)}>
+            <Text
+              style={[
+                styles.weekButtonText,
+                { color: numberOfWeek === 1 ? '#ffffff' : theme.textSecondary },
+              ]}>
+              1-я неделя {systemWeekNum === 1 ? '• Текущая' : ''}
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.weekButton,
-            { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9' },
-            numberOfWeek === 2 && { backgroundColor: theme.accent },
-          ]}
-          onPress={() => setNumberOfWeek(2)}>
-          <Text
+          <TouchableOpacity
             style={[
-              styles.weekButtonText,
-              { color: numberOfWeek === 2 ? '#ffffff' : theme.textSecondary },
-            ]}>
-            2-я неделя
-          </Text>
-        </TouchableOpacity>
-      </View>
+              styles.weekButton,
+              { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9' },
+              numberOfWeek === 2 && { backgroundColor: theme.accent },
+            ]}
+            onPress={() => setNumberOfWeek(2)}>
+            <Text
+              style={[
+                styles.weekButtonText,
+                { color: numberOfWeek === 2 ? '#ffffff' : theme.textSecondary },
+              ]}>
+              2-я неделя {systemWeekNum === 2 ? '• Текущая' : ''}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Дни недели */}
       <View style={[styles.daysRow, { backgroundColor: theme.surface }]}>
         {DAYS.map((day, index) => {
           const isActive = selectedDay === index;
+          const isSystemToday = index === systemTodayIndex;
+
           return (
             <TouchableOpacity
               key={day}
@@ -214,11 +271,13 @@ export default function ScheduleScreen() {
                 styles.dayTab,
                 { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9' },
                 isActive && { backgroundColor: theme.accent },
+                isSystemToday && !isActive && { borderWidth: 1.5, borderColor: theme.accent },
               ]}>
               <Text
                 style={[
                   styles.dayTabText,
                   { color: isActive ? '#ffffff' : theme.textSecondary },
+                  isSystemToday && !isActive && { color: theme.accent, fontWeight: '700' },
                 ]}>
                 {day}
               </Text>
@@ -231,9 +290,9 @@ export default function ScheduleScreen() {
       <ScrollView contentContainerStyle={styles.list}>
         {currentLessons.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={{ fontSize: 40, marginBottom: 12 }}>🎓</Text>
+            <Text style={{ fontSize: 40, marginBottom: 12 }}>📅</Text>
             <Text style={[styles.emptyText, { color: theme.textPrimary, fontWeight: '700', fontSize: 16 }]}>
-              Пар нет
+              Занятий нет
             </Text>
             <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 4, textAlign: 'center' }}>
               {isScheduleEditable
@@ -243,10 +302,16 @@ export default function ScheduleScreen() {
           </View>
         ) : (
           currentLessons.map((item) => {
-            const colorConfig = LESSON_COLORS[item.type] || LESSON_COLORS['Лекция'];
+            // Динамический цвет из настроек пользователя
+            const customColor = config.customLessonColors?.[item.type];
+            const colorConfig = getLessonStyleConfig(item.type, customColor);
+
             const cardBg = theme.mode === 'dark' ? colorConfig.bgDark : colorConfig.bgLight;
             const badgeBg = theme.mode === 'dark' ? colorConfig.badgeBgDark : colorConfig.badgeBgLight;
             const textColor = theme.mode === 'dark' ? colorConfig.textDark : colorConfig.textLight;
+
+            // Проверка, идет ли занятие прямо сейчас
+            const isCurrentLesson = isViewingToday && isLessonCurrentlyActive(item.time);
 
             return (
               <TouchableOpacity
@@ -258,11 +323,20 @@ export default function ScheduleScreen() {
                   {
                     backgroundColor: cardBg,
                     borderLeftColor: colorConfig.border,
-                    borderRightColor: theme.border,
-                    borderTopColor: theme.border,
-                    borderBottomColor: theme.border,
+                    borderRightColor: isCurrentLesson ? '#ef4444' : theme.border,
+                    borderTopColor: isCurrentLesson ? '#ef4444' : theme.border,
+                    borderBottomColor: isCurrentLesson ? '#ef4444' : theme.border,
+                    borderWidth: isCurrentLesson ? 2 : 1,
+                    borderLeftWidth: 6,
                   },
                 ]}>
+                {/* Бейдж текущего занятия в правом верхнем углу */}
+                {isCurrentLesson && (
+                  <View style={[styles.currentLessonBadge, { right: isScheduleEditable ? 40 : 12 }]}>
+                    <Text style={styles.currentLessonText}>🔴 Текущее занятие</Text>
+                  </View>
+                )}
+
                 <View style={[styles.timeBlock, { borderRightColor: theme.border }]}>
                   <Text style={[styles.timeText, { color: theme.textPrimary }]}>{item.time}</Text>
                   <View style={[styles.typeBadge, { backgroundColor: badgeBg }]}>
@@ -271,7 +345,9 @@ export default function ScheduleScreen() {
                 </View>
 
                 <View style={styles.infoBlock}>
-                  <Text style={[styles.subjectText, { color: theme.textPrimary }]}>{item.subject}</Text>
+                  <Text style={[styles.subjectText, { color: theme.textPrimary }]} numberOfLines={2}>
+                    {item.subject}
+                  </Text>
                   <Text style={[styles.roomText, { color: theme.textSecondary }]}>Ауд. {item.room}</Text>
                 </View>
 
@@ -302,7 +378,7 @@ export default function ScheduleScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Модалка добавления / редактирования пары */}
+      {/* Модалка добавления / редактирования занятия */}
       <Modal visible={isModalOpen} transparent animationType="fade" onRequestClose={() => setIsModalOpen(false)}>
         <View style={styles.modalBackdrop}>
           <TouchableOpacity
@@ -313,10 +389,10 @@ export default function ScheduleScreen() {
           <View style={[styles.modalSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
-                {editingLessonId ? 'Редактировать пару' : `Новая пара (${DAYS[selectedDay]})`}
+                {editingLessonId ? 'Редактировать занятие' : `Новое занятие (${DAYS[selectedDay]})`}
               </Text>
 
-              {!editingLessonId && (
+              {!editingLessonId && isTwoWeeks && (
                 <>
                   <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Добавить на неделю:</Text>
                   <View style={styles.targetWeekRow}>
@@ -370,26 +446,30 @@ export default function ScheduleScreen() {
               />
 
               {/* Быстрые слоты времени из настроек */}
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Быстрый выбор времени (звонки):</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickTimeScroll}>
-                {config.timeSlots.map((slot) => (
-                  <TouchableOpacity
-                    key={slot.lessonNumber}
-                    onPress={() => selectTimeSlot(slot)}
-                    style={[
-                      styles.quickTimeChip,
-                      { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#e2e8f0', borderColor: theme.border },
-                    ]}>
-                    <Text style={[styles.quickTimeText, { color: theme.textPrimary }]}>
-                      №{slot.lessonNumber}: {slot.startTime}-{slot.endTime}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              {config.timeSlots && config.timeSlots.length > 0 && (
+                <>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Быстрый выбор времени:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickTimeScroll}>
+                    {config.timeSlots.map((slot) => (
+                      <TouchableOpacity
+                        key={slot.lessonNumber}
+                        onPress={() => selectTimeSlot(slot)}
+                        style={[
+                          styles.quickTimeChip,
+                          { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#e2e8f0', borderColor: theme.border },
+                        ]}>
+                        <Text style={[styles.quickTimeText, { color: theme.textPrimary }]}>
+                          №{slot.lessonNumber}: {slot.startTime}-{slot.endTime}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
 
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Время занятий</Text>
+              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Время занятия</Text>
               <TextInput
-                placeholder="Время (напр. 08:00 - 09:35)"
+                placeholder="Время (напр. 09:00 - 10:00)"
                 placeholderTextColor={theme.textSecondary}
                 value={time}
                 onChangeText={setTime}
@@ -415,7 +495,9 @@ export default function ScheduleScreen() {
               <View style={styles.typeSelectorRow}>
                 {LESSON_TYPES.map((t) => {
                   const isSel = lessonType === t;
-                  const col = LESSON_COLORS[t];
+                  const customColor = config.customLessonColors?.[t];
+                  const col = getLessonStyleConfig(t, customColor);
+
                   return (
                     <TouchableOpacity
                       key={t}
@@ -463,7 +545,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   weekToggleContainer: { flexDirection: 'row', padding: 12, gap: 12, borderBottomWidth: 1 },
   weekButton: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
-  weekButtonText: { fontSize: 14, fontWeight: '600' },
+  weekButtonText: { fontSize: 13.5, fontWeight: '600' },
   daysRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12 },
   dayTab: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
   dayTabText: { fontWeight: '700', fontSize: 13 },
@@ -471,13 +553,28 @@ const styles = StyleSheet.create({
   empty: { marginTop: 60, alignItems: 'center', paddingHorizontal: 32 },
   emptyText: { fontSize: 16 },
   lessonCard: {
+    position: 'relative',
     flexDirection: 'row',
     padding: 14,
     borderRadius: 14,
     marginBottom: 12,
-    borderWidth: 1,
-    borderLeftWidth: 6,
     alignItems: 'center',
+  },
+  currentLessonBadge: {
+    position: 'absolute',
+    top: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderColor: '#ef4444',
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    zIndex: 1,
+  },
+  currentLessonText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ef4444',
   },
   timeBlock: { width: 105, borderRightWidth: 1, paddingRight: 10 },
   timeText: { fontSize: 12, fontWeight: '700', marginBottom: 6 },

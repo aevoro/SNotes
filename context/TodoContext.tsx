@@ -9,7 +9,9 @@ interface TodoContextValue {
   setSelectedFolderId: (id: string | 'all' | null) => void;
   createFolder: (name: string, color?: string) => Promise<TodoFolder>;
   deleteFolder: (folderId: string) => Promise<void>;
+  togglePinFolder: (folderId: string) => Promise<void>;
   saveTodo: (todoData: Omit<TodoItem, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => Promise<void>;
+  togglePinTodo: (todoId: string) => Promise<void>;
   toggleCompleteTodo: (todoId: string) => Promise<void>;
   deleteTodo: (todoId: string) => Promise<void>;
 }
@@ -45,8 +47,9 @@ export const TodoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       name: name.trim(),
       color: color || '#8774e1',
       createdAt: Date.now(),
+      isPinned: false,
     };
-    const updated = [...folders, newFolder];
+    const updated = [newFolder, ...folders];
     setFolders(updated);
     setSelectedFolderId(newFolder.id);
     await AsyncStorage.setItem(STORAGE_FOLDERS, JSON.stringify(updated));
@@ -66,6 +69,14 @@ export const TodoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       AsyncStorage.setItem(STORAGE_FOLDERS, JSON.stringify(updatedFolders)),
       AsyncStorage.setItem(STORAGE_TODOS, JSON.stringify(updatedTodos)),
     ]);
+  };
+
+  const togglePinFolder = async (folderId: string) => {
+    const updated = folders.map((f) =>
+      f.id === folderId ? { ...f, isPinned: !f.isPinned } : f
+    );
+    setFolders(updated);
+    await AsyncStorage.setItem(STORAGE_FOLDERS, JSON.stringify(updated));
   };
 
   const saveTodo = async (
@@ -91,10 +102,19 @@ export const TodoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deadlineText: todoData.deadlineText ?? null,
         createdAt: now,
         updatedAt: now,
+        isPinned: todoData.isPinned ?? false,
       };
       updated = [newTodo, ...todos];
     }
 
+    setTodos(updated);
+    await AsyncStorage.setItem(STORAGE_TODOS, JSON.stringify(updated));
+  };
+
+  const togglePinTodo = async (todoId: string) => {
+    const updated = todos.map((t) =>
+      t.id === todoId ? { ...t, isPinned: !t.isPinned, updatedAt: Date.now() } : t
+    );
     setTodos(updated);
     await AsyncStorage.setItem(STORAGE_TODOS, JSON.stringify(updated));
   };
@@ -122,7 +142,9 @@ export const TodoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSelectedFolderId,
         createFolder,
         deleteFolder,
+        togglePinFolder,
         saveTodo,
+        togglePinTodo,
         toggleCompleteTodo,
         deleteTodo,
       }}

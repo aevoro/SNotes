@@ -9,7 +9,9 @@ interface NotesContextValue {
   setSelectedFolderId: (id: string | 'all' | null) => void;
   createFolder: (name: string, color?: string) => Promise<NoteFolder>;
   deleteFolder: (folderId: string) => Promise<void>;
+  togglePinFolder: (folderId: string) => Promise<void>;
   saveNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => Promise<void>;
+  togglePinNote: (noteId: string) => Promise<void>;
   deleteNote: (noteId: string) => Promise<void>;
 }
 
@@ -44,8 +46,9 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       name: name.trim(),
       color: color || '#0284C7',
       createdAt: Date.now(),
+      isPinned: false,
     };
-    const updated = [...folders, newFolder];
+    const updated = [newFolder, ...folders];
     setFolders(updated);
     setSelectedFolderId(newFolder.id);
     await AsyncStorage.setItem(STORAGE_FOLDERS, JSON.stringify(updated));
@@ -65,6 +68,14 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       AsyncStorage.setItem(STORAGE_FOLDERS, JSON.stringify(updatedFolders)),
       AsyncStorage.setItem(STORAGE_NOTES, JSON.stringify(updatedNotes)),
     ]);
+  };
+
+  const togglePinFolder = async (folderId: string) => {
+    const updated = folders.map((f) =>
+      f.id === folderId ? { ...f, isPinned: !f.isPinned } : f
+    );
+    setFolders(updated);
+    await AsyncStorage.setItem(STORAGE_FOLDERS, JSON.stringify(updated));
   };
 
   const saveNote = async (
@@ -87,10 +98,19 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         folderId: noteData.folderId,
         createdAt: now,
         updatedAt: now,
+        isPinned: noteData.isPinned ?? false,
       };
       updated = [newNote, ...notes];
     }
 
+    setNotes(updated);
+    await AsyncStorage.setItem(STORAGE_NOTES, JSON.stringify(updated));
+  };
+
+  const togglePinNote = async (noteId: string) => {
+    const updated = notes.map((n) =>
+      n.id === noteId ? { ...n, isPinned: !n.isPinned, updatedAt: Date.now() } : n
+    );
     setNotes(updated);
     await AsyncStorage.setItem(STORAGE_NOTES, JSON.stringify(updated));
   };
@@ -110,7 +130,9 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setSelectedFolderId,
         createFolder,
         deleteFolder,
+        togglePinFolder,
         saveNote,
+        togglePinNote,
         deleteNote,
       }}
     >

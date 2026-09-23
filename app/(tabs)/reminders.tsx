@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,10 +9,143 @@ import {
   ScrollView,
   Alert,
   Platform,
+  BackHandler,
+  PanResponder,
+  ToastAndroid,
 } from 'react-native';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useTodo } from '../../context/TodoContext';
 import { TodoItem } from '../../src/types/todo';
+
+function getDaysWord(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 19) return 'дней';
+  if (mod10 === 1) return 'день';
+  if (mod10 >= 2 && mod10 <= 4) return 'дня';
+  return 'дней';
+}
+
+interface TodoCardItemProps {
+  item: TodoItem;
+  theme: any;
+  hasFolders: boolean;
+  folderName: string | null;
+  isDraggable: boolean;
+  renderDeadlineBadge: (item: TodoItem) => React.ReactNode;
+  onOpen: () => void;
+  onToggleComplete: () => void;
+  onTogglePin: () => void;
+  onDelete: () => void;
+  onDragStart: (item: TodoItem, pageX: number, pageY: number) => void;
+  onDragMove: (pageX: number, pageY: number) => void;
+  onDragEnd: () => void;
+}
+
+function TodoCardItem({
+  item,
+  theme,
+  hasFolders,
+  folderName,
+  isDraggable,
+  renderDeadlineBadge,
+  onOpen,
+  onToggleComplete,
+  onTogglePin,
+  onDelete,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+}: TodoCardItemProps) {
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        onDragStart(item, evt.nativeEvent.pageX, evt.nativeEvent.pageY);
+      },
+      onPanResponderMove: (evt) => {
+        onDragMove(evt.nativeEvent.pageX, evt.nativeEvent.pageY);
+      },
+      onPanResponderRelease: () => {
+        onDragEnd();
+      },
+      onPanResponderTerminate: () => {
+        onDragEnd();
+      },
+    })
+  ).current;
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.card,
+        {
+          backgroundColor: theme.card,
+          borderColor: item.isPinned ? theme.accent : theme.border,
+          borderWidth: item.isPinned ? 1.5 : 1,
+        },
+      ]}
+      activeOpacity={0.7}
+      onPress={onOpen}>
+      {isDraggable && (
+        <View {...panResponder.panHandlers} style={styles.dragGripContainer}>
+          <Text style={[styles.dragGripIcon, { color: theme.textSecondary }]}>⠿</Text>
+        </View>
+      )}
+
+      <TouchableOpacity
+        onPress={onToggleComplete}
+        hitSlop={8}
+        style={[
+          styles.checkbox,
+          { borderColor: theme.border },
+          item.isCompleted && { backgroundColor: theme.accent, borderColor: theme.accent },
+        ]}>
+        {item.isCompleted && <Text style={styles.checkmark}>✓</Text>}
+      </TouchableOpacity>
+
+      <View style={styles.textContainer}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text
+            style={[
+              styles.title,
+              { color: theme.textPrimary },
+              item.isCompleted && { textDecorationLine: 'line-through', color: theme.textSecondary },
+            ]}>
+            {item.title}
+          </Text>
+          {item.isPinned && <Text style={{ fontSize: 13 }}>📌</Text>}
+        </View>
+
+        {item.description ? (
+          <Text numberOfLines={2} style={[styles.desc, { color: theme.textSecondary }]}>
+            {item.description}
+          </Text>
+        ) : null}
+
+        <View style={styles.metaRow}>
+          {hasFolders && folderName && (
+            <View style={[styles.folderBadge, { backgroundColor: theme.pillBg }]}>
+              <Text style={[styles.folderBadgeText, { color: theme.accent }]}>📂 {folderName}</Text>
+            </View>
+          )}
+          {renderDeadlineBadge(item)}
+        </View>
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <TouchableOpacity hitSlop={8} onPress={onTogglePin} style={styles.pinBtn}>
+          <Text style={{ fontSize: 15, opacity: item.isPinned ? 1 : 0.4 }}>📌</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={onDelete} hitSlop={10} style={styles.deleteBtn}>
+          <Text style={{ color: '#ef4444', fontSize: 16 }}>✕</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 export default function RemindersScreen() {
   const { theme } = useAppTheme();
@@ -21,13 +154,27 @@ export default function RemindersScreen() {
     folders,
     createFolder,
     deleteFolder,
+    togglePinFolder,
     saveTodo,
+    togglePinTodo,
     toggleCompleteTodo,
     deleteTodo,
   } = useTodo();
 
-  const [search, setSearch] = useState('');
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+
+  // Drag and Drop задач в папки
+  const [draggingTodo, setDraggingTodo] = useState<TodoItem | null>(null);
+  const draggingTodoRef = useRef<TodoItem | null>(null);
+  draggingTodoRef.current = draggingTodo;
+
+  const [hoveredFolderId, setHoveredFolderId] = useState<string | null>(null);
+  const hoveredFolderIdRef = useRef<string | null>(null);
+  hoveredFolderIdRef.current = hoveredFolderId;
+
+  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
+  const folderBoundsRef = useRef<Record<string, { x: number; y: number; width: number; height: number }>>({});
+  const folderRefs = useRef<Record<string, any>>({});
 
   // Модалка создания папки
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
@@ -39,7 +186,34 @@ export default function RemindersScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [targetFolderId, setTargetFolderId] = useState<string | null>(null);
-  const [deadlineText, setDeadlineText] = useState('');
+
+  // Дедлайн: выбор колесом/скроллом от 1 до 365 дней
+  const [hasDeadline, setHasDeadline] = useState(false);
+  const [deadlineDays, setDeadlineDays] = useState(1);
+
+  // Обработка жеста / кнопки «Назад»
+  useEffect(() => {
+    if (activeFolderId === null && !isModalOpen && !isFolderModalOpen) return;
+
+    const onBackPress = () => {
+      if (isModalOpen) {
+        setIsModalOpen(false);
+        return true;
+      }
+      if (isFolderModalOpen) {
+        setIsFolderModalOpen(false);
+        return true;
+      }
+      if (activeFolderId !== null) {
+        setActiveFolderId(null);
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [activeFolderId, isModalOpen, isFolderModalOpen]);
 
   const handleCreateFolder = async () => {
     const trimmed = newFolderName.trim();
@@ -59,7 +233,7 @@ export default function RemindersScreen() {
     };
 
     if (Platform.OS === 'web') {
-      if (window.confirm(`Удалить папку задач "${folderName}"?\nЗадачи из неё перенесутся в "Все".`)) {
+      if (window.confirm(`Удалить папку задач "${folderName}"?\nЗадачи из неё перенесутся в категорию "Все".`)) {
         doDelete();
       }
     } else {
@@ -79,7 +253,8 @@ export default function RemindersScreen() {
     setTitle('');
     setDescription('');
     setTargetFolderId(activeFolderId);
-    setDeadlineText('');
+    setHasDeadline(false);
+    setDeadlineDays(1);
     setIsModalOpen(true);
   };
 
@@ -88,9 +263,14 @@ export default function RemindersScreen() {
     setTitle(todo.title);
     setDescription(todo.description || '');
     setTargetFolderId(todo.folderId);
-    setDeadlineText(
-      todo.deadlineText || (todo.deadline ? new Date(todo.deadline).toLocaleDateString('ru-RU') : '')
-    );
+    if (todo.deadline) {
+      setHasDeadline(true);
+      const diff = Math.max(1, Math.min(365, Math.ceil((todo.deadline - Date.now()) / (24 * 3600 * 1000))));
+      setDeadlineDays(diff);
+    } else {
+      setHasDeadline(false);
+      setDeadlineDays(1);
+    }
     setIsModalOpen(true);
   };
 
@@ -98,37 +278,14 @@ export default function RemindersScreen() {
     if (!title.trim()) return;
 
     let deadlineTs: number | null = null;
-    const trimmedDl = deadlineText.trim();
+    let deadlineStr: string | null = null;
 
-    if (trimmedDl) {
-      const lower = trimmedDl.toLowerCase();
-      if (lower.includes('сегодня')) {
-        const d = new Date();
-        d.setHours(23, 59, 59, 999);
-        deadlineTs = d.getTime();
-      } else if (lower.includes('завтра')) {
-        const d = new Date();
-        d.setDate(d.getDate() + 1);
-        d.setHours(23, 59, 59, 999);
-        deadlineTs = d.getTime();
-      } else {
-        // Парсинг формата ДД.ММ.ГГГГ (напр. 03.09.2026)
-        const dotParts = trimmedDl.split('.');
-        if (dotParts.length >= 2) {
-          const day = parseInt(dotParts[0], 10);
-          const month = parseInt(dotParts[1], 10) - 1;
-          const year = dotParts.length === 3 ? parseInt(dotParts[2], 10) : new Date().getFullYear();
-          if (!isNaN(day) && !isNaN(month)) {
-            const d = new Date(year, month, day, 23, 59, 59);
-            deadlineTs = d.getTime();
-          }
-        } else {
-          const parsed = Date.parse(trimmedDl);
-          if (!isNaN(parsed)) {
-            deadlineTs = parsed;
-          }
-        }
-      }
+    if (hasDeadline) {
+      const d = new Date();
+      d.setDate(d.getDate() + deadlineDays);
+      d.setHours(23, 59, 59, 999);
+      deadlineTs = d.getTime();
+      deadlineStr = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
     }
 
     await saveTodo({
@@ -137,42 +294,82 @@ export default function RemindersScreen() {
       description: description.trim(),
       folderId: targetFolderId !== null ? targetFolderId : activeFolderId,
       deadline: deadlineTs,
-      deadlineText: trimmedDl || null,
+      deadlineText: deadlineStr,
       isCompleted: activeTodo?.isCompleted ?? false,
+      isPinned: activeTodo?.isPinned,
     });
 
     setIsModalOpen(false);
   };
 
-  const setQuickDeadline = (type: 'today' | 'tomorrow' | 'week') => {
-    const d = new Date();
-    if (type === 'today') {
-      setDeadlineText('Сегодня');
-    } else if (type === 'tomorrow') {
-      setDeadlineText('Завтра');
-    } else if (type === 'week') {
-      d.setDate(d.getDate() + 7);
-      setDeadlineText(d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }));
-    }
+  // Drag and Drop логика
+  const handleDragStart = (item: TodoItem, pageX: number, pageY: number) => {
+    setDraggingTodo(item);
+    setDragPos({ x: pageX, y: pageY });
+    const bounds: Record<string, { x: number; y: number; width: number; height: number }> = {};
+    folders.forEach((f) => {
+      folderRefs.current[f.id]?.measureInWindow((x: number, y: number, width: number, height: number) => {
+        bounds[f.id] = { x, y, width, height };
+      });
+    });
+    folderBoundsRef.current = bounds;
   };
 
-  const filteredTodos = todos.filter((t) => {
-    const matchesSearch =
-      t.title.toLowerCase().includes(search.toLowerCase()) ||
-      (t.description && t.description.toLowerCase().includes(search.toLowerCase()));
-
-    if (!matchesSearch) return false;
-    if (activeFolderId !== null) {
-      return t.folderId === activeFolderId;
+  const handleDragMove = (pageX: number, pageY: number) => {
+    setDragPos({ x: pageX, y: pageY });
+    let hitId: string | null = null;
+    const bounds = folderBoundsRef.current;
+    for (const id in bounds) {
+      const b = bounds[id];
+      if (b && pageX >= b.x && pageX <= b.x + b.width && pageY >= b.y && pageY <= b.y + b.height) {
+        hitId = id;
+        break;
+      }
     }
-    return true;
+    setHoveredFolderId(hitId);
+  };
+
+  const handleDragEnd = async () => {
+    const targetFolderId = hoveredFolderIdRef.current;
+    const todoToMove = draggingTodoRef.current;
+    if (targetFolderId && todoToMove) {
+      const targetFolder = folders.find((f) => f.id === targetFolderId);
+      await saveTodo({
+        ...todoToMove,
+        folderId: targetFolderId,
+      });
+      if (Platform.OS === 'android' && targetFolder) {
+        ToastAndroid.show(`Задача перемещена в папку "${targetFolder.name}"`, ToastAndroid.SHORT);
+      }
+    }
+    setDraggingTodo(null);
+    setHoveredFolderId(null);
+  };
+
+  // Сортировка папок
+  const sortedFolders = [...folders].sort((a, b) => {
+    if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
+    return (b.createdAt || 0) - (a.createdAt || 0);
   });
 
-  const rootTodos = search.trim()
-    ? filteredTodos
-    : todos.filter((t) => t.folderId === null);
+  const sortTodoList = (list: TodoItem[]) => {
+    return [...list].sort((a, b) => {
+      if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+  };
+
+  const hasFolders = folders.length > 0;
+  const displayTodos = sortTodoList(
+    activeFolderId !== null
+      ? todos.filter((t) => t.folderId === activeFolderId)
+      : !hasFolders
+      ? todos
+      : todos.filter((t) => t.folderId === null)
+  );
 
   const activeFolder = folders.find((item) => item.id === activeFolderId);
+  const isEntirelyEmpty = todos.length === 0 && folders.length === 0;
 
   const getFolderName = (folderId: string | null) => {
     if (!folderId) return null;
@@ -206,25 +403,18 @@ export default function RemindersScreen() {
     );
   };
 
+  const targetDeadlineDate = new Date();
+  targetDeadlineDate.setDate(targetDeadlineDate.getDate() + deadlineDays);
+  targetDeadlineDate.setHours(23, 59, 59, 999);
+  const formattedDeadlineDate = targetDeadlineDate.toLocaleDateString('ru-RU', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      {/* Поиск */}
-      <View style={[styles.searchWrapper, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-        <TextInput
-          placeholder="Поиск задач..."
-          placeholderTextColor={theme.textSecondary}
-          value={search}
-          onChangeText={setSearch}
-          style={[
-            styles.searchInput,
-            {
-              backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9',
-              color: theme.textPrimary,
-            },
-          ]}
-        />
-      </View>
-
       {/* Шапка вложенности папки */}
       {activeFolderId !== null ? (
         <View style={[styles.folderHeader, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
@@ -256,137 +446,163 @@ export default function RemindersScreen() {
       )}
 
       <ScrollView contentContainerStyle={styles.scrollListContainer} showsVerticalScrollIndicator={false}>
-        {/* КОРНЕВОЙ РЕЖИМ: Отображение Папок карточками вместе с задачами */}
-        {activeFolderId === null && !search.trim() && (
-          <View style={styles.foldersSection}>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Папки задач ({folders.length})</Text>
-            {folders.length === 0 ? (
-              <Text style={[styles.emptySectionText, { color: theme.textSecondary }]}>
-                Папок задач пока нет. Нажмите «+ Создать папку» выше
-              </Text>
-            ) : (
-              <View style={styles.foldersGrid}>
-                {folders.map((folder) => {
-                  const count = todos.filter((t) => t.folderId === folder.id).length;
-                  return (
-                    <TouchableOpacity
-                      key={folder.id}
-                      activeOpacity={0.7}
-                      onPress={() => setActiveFolderId(folder.id)}
-                      style={[
-                        styles.folderCard,
-                        { backgroundColor: theme.card, borderColor: theme.border },
-                      ]}>
-                      <View style={styles.folderCardLeft}>
-                        <Text style={{ fontSize: 24, marginRight: 10 }}>📂</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.folderCardName, { color: theme.textPrimary }]} numberOfLines={1}>
-                            {folder.name}
-                          </Text>
-                          <Text style={[styles.folderCardCount, { color: theme.textSecondary }]}>
-                            {count} задач
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.folderCardRight}>
+        {/* Пустое состояние, если вообще нет задач и папок */}
+        {isEntirelyEmpty ? (
+          <View style={styles.emptyState}>
+            <Text style={{ fontSize: 44, marginBottom: 12 }}>🎯</Text>
+            <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>Список задач пуст</Text>
+            <Text style={[styles.emptyDesc, { color: theme.textSecondary }]}>
+              Нажмите на плюс внизу, чтобы добавить новую задачу
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* СЕКЦИЯ ПАПОК: Показывается ТОЛЬКО если папки реально созданы */}
+            {activeFolderId === null && hasFolders && (
+              <View style={styles.foldersSection}>
+                <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Папки задач ({sortedFolders.length})</Text>
+                <View style={styles.foldersGrid}>
+                  {sortedFolders.map((folder) => {
+                    const count = todos.filter((t) => t.folderId === folder.id).length;
+                    const isHovered = hoveredFolderId === folder.id;
+                    return (
+                      <View
+                        key={folder.id}
+                        collapsable={false}
+                        ref={(el) => {
+                          if (el) folderRefs.current[folder.id] = el;
+                        }}>
                         <TouchableOpacity
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          onPress={() => handleDeleteFolderConfirm(folder.id, folder.name)}
-                          style={styles.folderDeleteIconBtn}>
-                          <Text style={{ fontSize: 16 }}>🗑️</Text>
+                          activeOpacity={0.7}
+                          onPress={() => setActiveFolderId(folder.id)}
+                          style={[
+                            styles.folderCard,
+                            {
+                              backgroundColor: isHovered ? theme.pillBg : theme.card,
+                              borderColor: isHovered ? theme.accent : folder.isPinned ? theme.accent : theme.border,
+                              borderWidth: isHovered ? 2 : folder.isPinned ? 1.5 : 1,
+                            },
+                          ]}>
+                          <View style={styles.folderCardLeft}>
+                            <Text style={{ fontSize: 24, marginRight: 10 }}>{isHovered ? '📥' : '📂'}</Text>
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={[styles.folderCardName, { color: theme.textPrimary }]} numberOfLines={1}>
+                                  {folder.name}
+                                </Text>
+                                {folder.isPinned && <Text style={{ fontSize: 13 }}>📌</Text>}
+                              </View>
+                              <Text
+                                style={[
+                                  styles.folderCardCount,
+                                  { color: isHovered ? theme.accent : theme.textSecondary, fontWeight: isHovered ? '700' : 'normal' },
+                                ]}>
+                                {isHovered ? 'Отпустите, чтобы переместить сюда' : `${count} задач`}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.folderCardRight}>
+                            <TouchableOpacity
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              onPress={() => togglePinFolder(folder.id)}
+                              style={styles.folderIconBtn}>
+                              <Text style={{ fontSize: 15, opacity: folder.isPinned ? 1 : 0.4 }}>📌</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              onPress={() => handleDeleteFolderConfirm(folder.id, folder.name)}
+                              style={styles.folderIconBtn}>
+                              <Text style={{ fontSize: 16 }}>🗑️</Text>
+                            </TouchableOpacity>
+                            <Text style={{ color: theme.accent, fontSize: 16, marginLeft: 2 }}>➔</Text>
+                          </View>
                         </TouchableOpacity>
-                        <Text style={{ color: theme.accent, fontSize: 16, marginLeft: 4 }}>➔</Text>
                       </View>
-                    </TouchableOpacity>
-                  );
-                })}
+                    );
+                  })}
+                </View>
               </View>
             )}
-          </View>
-        )}
 
-        {/* СЕКЦИЯ ЗАДАЧ */}
-        <View style={styles.notesSection}>
-          {activeFolderId === null && !search.trim() && (
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: 16 }]}>
-              Задачи без папки ({rootTodos.length})
-            </Text>
-          )}
-
-          {(activeFolderId !== null ? filteredTodos : rootTodos).length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={{ fontSize: 40, marginBottom: 10 }}>🎯</Text>
-              <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>Задач не найдено</Text>
-              <Text style={[styles.emptyDesc, { color: theme.textSecondary }]}>
-                {activeFolderId !== null
-                  ? 'В этой папке пока нет задач. Нажмите на плюс внизу, чтобы добавить.'
-                  : 'Нажмите на плюс внизу, чтобы добавить новую задачу'}
-              </Text>
-            </View>
-          ) : (
-            (activeFolderId !== null ? filteredTodos : rootTodos).map((item) => {
-              const folderName = getFolderName(item.folderId);
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[
-                    styles.card,
-                    { backgroundColor: theme.card, borderColor: theme.border },
-                  ]}
-                  activeOpacity={0.7}
-                  onPress={() => openEditModal(item)}>
-                  <TouchableOpacity
-                    onPress={() => toggleCompleteTodo(item.id)}
-                    hitSlop={8}
-                    style={[
-                      styles.checkbox,
-                      { borderColor: theme.border },
-                      item.isCompleted && { backgroundColor: theme.accent, borderColor: theme.accent },
-                    ]}>
-                    {item.isCompleted && <Text style={styles.checkmark}>✓</Text>}
-                  </TouchableOpacity>
-
-                  <View style={styles.textContainer}>
-                    <Text
-                      style={[
-                        styles.title,
-                        { color: theme.textPrimary },
-                        item.isCompleted && { textDecorationLine: 'line-through', color: theme.textSecondary },
-                      ]}>
-                      {item.title}
+            {/* СЕКЦИЯ ЗАДАЧ */}
+            <View style={styles.notesSection}>
+              {activeFolderId === null && hasFolders && (
+                <View style={styles.unassignedHeaderRow}>
+                  <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+                    Задачи без папки ({displayTodos.length})
+                  </Text>
+                  {displayTodos.length > 0 && (
+                    <Text style={[styles.dragHintText, { color: theme.textSecondary }]}>
+                      Зажмите ⠿ для переноса в папку
                     </Text>
+                  )}
+                </View>
+              )}
 
-                    {item.description ? (
-                      <Text
-                        numberOfLines={2}
-                        style={[styles.desc, { color: theme.textSecondary }]}>
-                        {item.description}
-                      </Text>
-                    ) : null}
-
-                    <View style={styles.metaRow}>
-                      {folderName && (
-                        <View style={[styles.folderBadge, { backgroundColor: theme.pillBg }]}>
-                          <Text style={[styles.folderBadgeText, { color: theme.accent }]}>📂 {folderName}</Text>
-                        </View>
-                      )}
-                      {renderDeadlineBadge(item)}
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    onPress={() => deleteTodo(item.id)}
-                    hitSlop={10}
-                    style={styles.deleteBtn}>
-                    <Text style={{ color: '#ef4444', fontSize: 16 }}>✕</Text>
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </View>
+              {displayTodos.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={{ fontSize: 38, marginBottom: 10 }}>🎯</Text>
+                  <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
+                    {activeFolderId !== null ? 'В этой папке пока нет задач' : 'Список задач пуст'}
+                  </Text>
+                  <Text style={[styles.emptyDesc, { color: theme.textSecondary }]}>
+                    Нажмите на плюс внизу, чтобы добавить новую задачу
+                  </Text>
+                </View>
+              ) : (
+                displayTodos.map((item) => {
+                  const folderName = getFolderName(item.folderId);
+                  const isUnassigned = activeFolderId === null && hasFolders && item.folderId === null;
+                  return (
+                    <TodoCardItem
+                      key={item.id}
+                      item={item}
+                      theme={theme}
+                      hasFolders={hasFolders}
+                      folderName={folderName}
+                      isDraggable={isUnassigned}
+                      renderDeadlineBadge={renderDeadlineBadge}
+                      onOpen={() => openEditModal(item)}
+                      onToggleComplete={() => toggleCompleteTodo(item.id)}
+                      onTogglePin={() => togglePinTodo(item.id)}
+                      onDelete={() => deleteTodo(item.id)}
+                      onDragStart={handleDragStart}
+                      onDragMove={handleDragMove}
+                      onDragEnd={handleDragEnd}
+                    />
+                  );
+                })
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
+
+      {/* Плавающий бейдж при перетаскивании задачи */}
+      {draggingTodo && (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.floatingDragBadge,
+            {
+              left: Math.max(10, dragPos.x - 90),
+              top: Math.max(20, dragPos.y - 45),
+              backgroundColor: theme.card,
+              borderColor: hoveredFolderId ? theme.accent : theme.border,
+            },
+          ]}>
+          <Text style={{ fontSize: 20, marginRight: 8 }}>{hoveredFolderId ? '📥' : '🎯'}</Text>
+          <View style={{ maxWidth: 180 }}>
+            <Text style={[styles.floatingDragTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+              {draggingTodo.title}
+            </Text>
+            <Text style={[styles.floatingDragSub, { color: theme.accent }]}>
+              {hoveredFolderId ? 'Отпустите в папку' : 'Перетащите в папку ➔'}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* FAB Кнопка добавления задачи */}
       <TouchableOpacity
@@ -439,64 +655,139 @@ export default function RemindersScreen() {
                 ]}
               />
 
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Выберите папку:</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                <TouchableOpacity
-                  onPress={() => setTargetFolderId(null)}
-                  style={[
-                    styles.folderChip,
-                    { borderColor: theme.border },
-                    targetFolderId === null && { backgroundColor: theme.accent, borderColor: theme.accent },
-                  ]}>
-                  <Text style={{ fontSize: 12, color: targetFolderId === null ? '#ffffff' : theme.textSecondary }}>
-                    Без папки
+              {hasFolders && (
+                <>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Выберите папку:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                    <TouchableOpacity
+                      onPress={() => setTargetFolderId(null)}
+                      style={[
+                        styles.folderChip,
+                        { borderColor: theme.border },
+                        targetFolderId === null && { backgroundColor: theme.accent, borderColor: theme.accent },
+                      ]}>
+                      <Text style={{ fontSize: 12, color: targetFolderId === null ? '#ffffff' : theme.textSecondary }}>
+                        Без папки
+                      </Text>
+                    </TouchableOpacity>
+                    {folders.map((f) => (
+                      <TouchableOpacity
+                        key={f.id}
+                        onPress={() => setTargetFolderId(f.id)}
+                        style={[
+                          styles.folderChip,
+                          { borderColor: theme.border },
+                          targetFolderId === f.id && { backgroundColor: theme.accent, borderColor: theme.accent },
+                        ]}>
+                        <Text style={{ fontSize: 12, color: targetFolderId === f.id ? '#ffffff' : theme.textSecondary }}>
+                          📂 {f.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+
+              {/* Выбор дедлайна: колесо прокрута / дней от 1 до 365 с синхронизацией даты */}
+              <View style={styles.deadlineContainer}>
+                <View style={styles.deadlineContainerHeader}>
+                  <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginBottom: 0 }]}>
+                    Дедлайн задачи
                   </Text>
-                </TouchableOpacity>
-                {folders.map((f) => (
                   <TouchableOpacity
-                    key={f.id}
-                    onPress={() => setTargetFolderId(f.id)}
+                    onPress={() => setHasDeadline(!hasDeadline)}
                     style={[
-                      styles.folderChip,
-                      { borderColor: theme.border },
-                      targetFolderId === f.id && { backgroundColor: theme.accent, borderColor: theme.accent },
+                      styles.deadlineToggleBtn,
+                      {
+                        backgroundColor: hasDeadline ? theme.accent : (theme.mode === 'dark' ? '#27272a' : '#f1f5f9'),
+                        borderColor: hasDeadline ? theme.accent : theme.border,
+                      },
                     ]}>
-                    <Text style={{ fontSize: 12, color: targetFolderId === f.id ? '#ffffff' : theme.textSecondary }}>
-                      📂 {f.name}
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: hasDeadline ? '#ffffff' : theme.textSecondary }}>
+                      {hasDeadline ? '✓ Дедлайн активен' : '+ Без дедлайна'}
                     </Text>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
+                </View>
 
-              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Дедлайн (время / дата):</Text>
-              <View style={styles.quickDeadlineRow}>
-                <TouchableOpacity
-                  onPress={() => setQuickDeadline('today')}
-                  style={[styles.quickDeadlineChip, { backgroundColor: theme.pillBg, borderColor: theme.accent }]}>
-                  <Text style={[styles.quickDeadlineText, { color: theme.accent }]}>Сегодня</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setQuickDeadline('tomorrow')}
-                  style={[styles.quickDeadlineChip, { backgroundColor: theme.pillBg, borderColor: theme.accent }]}>
-                  <Text style={[styles.quickDeadlineText, { color: theme.accent }]}>Завтра</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setQuickDeadline('week')}
-                  style={[styles.quickDeadlineChip, { backgroundColor: theme.pillBg, borderColor: theme.accent }]}>
-                  <Text style={[styles.quickDeadlineText, { color: theme.accent }]}>Через неделю</Text>
-                </TouchableOpacity>
+                {hasDeadline && (
+                  <View style={[styles.deadlinePickerCard, { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9', borderColor: theme.border }]}>
+                    <Text style={[styles.deadlinePickerSubtitle, { color: theme.textSecondary }]}>
+                      Количество дней до дедлайна (от 1 до 365):
+                    </Text>
+
+                    {/* Кнопки шага и счетчик дней */}
+                    <View style={styles.daysStepperRow}>
+                      <TouchableOpacity
+                        onPress={() => setDeadlineDays(Math.max(1, deadlineDays - 10))}
+                        style={[styles.stepBtn, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                        <Text style={[styles.stepBtnText, { color: theme.textPrimary }]}>-10</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setDeadlineDays(Math.max(1, deadlineDays - 1))}
+                        style={[styles.stepBtn, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                        <Text style={[styles.stepBtnText, { color: theme.textPrimary }]}>-1</Text>
+                      </TouchableOpacity>
+
+                      <View style={[styles.daysDisplayBox, { backgroundColor: theme.pillBg, borderColor: theme.accent }]}>
+                        <Text style={[styles.daysDisplayText, { color: theme.accent }]}>
+                          {deadlineDays}
+                        </Text>
+                        <Text style={[styles.daysDisplayLabel, { color: theme.textSecondary }]}>
+                          {getDaysWord(deadlineDays)}
+                        </Text>
+                      </View>
+
+                      <TouchableOpacity
+                        onPress={() => setDeadlineDays(Math.min(365, deadlineDays + 1))}
+                        style={[styles.stepBtn, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                        <Text style={[styles.stepBtnText, { color: theme.textPrimary }]}>+1</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setDeadlineDays(Math.min(365, deadlineDays + 10))}
+                        style={[styles.stepBtn, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                        <Text style={[styles.stepBtnText, { color: theme.textPrimary }]}>+10</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Колесо / горизонтальный скролл выбора дней */}
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.wheelScrollContent}
+                      style={styles.wheelScroll}>
+                      {[1, 2, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 120, 180, 240, 300, 365].map((d) => {
+                        const isSel = deadlineDays === d;
+                        return (
+                          <TouchableOpacity
+                            key={d}
+                            onPress={() => setDeadlineDays(d)}
+                            style={[
+                              styles.wheelDayChip,
+                              { borderColor: theme.border, backgroundColor: isSel ? theme.accent : theme.card },
+                            ]}>
+                            <Text style={[styles.wheelDayChipText, { color: isSel ? '#ffffff' : theme.textPrimary }]}>
+                              {d} {getDaysWord(d)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+
+                    {/* Синхронизированный день и дата под выбором */}
+                    <View style={[styles.syncDateBadge, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                      <Text style={{ fontSize: 18, marginRight: 8 }}>📅</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.syncDateTitle, { color: theme.accent }]}>
+                          Дедлайн: {formattedDeadlineDate}
+                        </Text>
+                        <Text style={[styles.syncDateSub, { color: theme.textSecondary }]}>
+                          через {deadlineDays} {getDaysWord(deadlineDays)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
               </View>
-
-              <TextInput
-                placeholder="Дедлайн (напр. 18:00, Завтра в 15:00, 03.09.2026)..."
-                placeholderTextColor={theme.textSecondary}
-                value={deadlineText}
-                onChangeText={setDeadlineText}
-                style={[
-                  styles.modalInput,
-                  { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9', color: theme.textPrimary },
-                ]}
-              />
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
@@ -563,8 +854,6 @@ export default function RemindersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  searchWrapper: { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
-  searchInput: { height: 40, borderRadius: 12, paddingHorizontal: 14, fontSize: 14 },
   rootHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -588,9 +877,8 @@ const styles = StyleSheet.create({
   folderTitleText: { fontSize: 16, fontWeight: '700', flex: 1 },
   deleteFolderHeaderBtn: { paddingVertical: 4, paddingHorizontal: 8 },
   scrollListContainer: { padding: 16, paddingBottom: 100 },
-  foldersSection: { marginBottom: 10 },
+  foldersSection: { marginBottom: 14 },
   sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginBottom: 10, letterSpacing: 0.5 },
-  emptySectionText: { fontSize: 13, fontStyle: 'italic' },
   foldersGrid: { gap: 10 },
   folderCard: {
     flexDirection: 'row',
@@ -604,11 +892,43 @@ const styles = StyleSheet.create({
   folderCardName: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
   folderCardCount: { fontSize: 12 },
   folderCardRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  folderDeleteIconBtn: { padding: 4 },
+  folderIconBtn: { padding: 4 },
   notesSection: {},
-  emptyState: { alignItems: 'center', paddingHorizontal: 32, marginTop: 40 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', marginBottom: 6 },
+  emptyState: { alignItems: 'center', paddingHorizontal: 32, marginTop: 60 },
+  emptyTitle: { fontSize: 17, fontWeight: '700', marginBottom: 6 },
   emptyDesc: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
+  unassignedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  dragHintText: { fontSize: 11, fontStyle: 'italic' },
+  dragGripContainer: {
+    paddingRight: 8,
+    paddingVertical: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dragGripIcon: { fontSize: 18, letterSpacing: -2 },
+  floatingDragBadge: {
+    position: 'absolute',
+    zIndex: 9999,
+    elevation: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  floatingDragTitle: { fontSize: 14, fontWeight: '700' },
+  floatingDragSub: { fontSize: 11, fontWeight: '600' },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -635,7 +955,8 @@ const styles = StyleSheet.create({
   folderBadgeText: { fontSize: 11, fontWeight: '700' },
   deadlineBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   deadlineText: { fontSize: 11, fontWeight: '700' },
-  deleteBtn: { padding: 6, marginLeft: 8 },
+  pinBtn: { padding: 4 },
+  deleteBtn: { padding: 4 },
   fab: {
     position: 'absolute',
     right: 20,
@@ -656,15 +977,30 @@ const styles = StyleSheet.create({
   plusVertical: { position: 'absolute', width: 2.5, height: 18, backgroundColor: '#ffffff', borderRadius: 2 },
   modalBackdrop: { flex: 1, position: 'relative', backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   backdropTouchable: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 },
-  createSheet: { width: '100%', maxWidth: 360, maxHeight: 540, borderRadius: 20, padding: 20, borderWidth: 1, zIndex: 10, position: 'relative' },
+  createSheet: { width: '100%', maxWidth: 360, maxHeight: 580, borderRadius: 20, padding: 20, borderWidth: 1, zIndex: 10, position: 'relative' },
   modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 14, textAlign: 'center' },
   fieldLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 },
   modalInput: { height: 42, borderRadius: 10, paddingHorizontal: 12, marginBottom: 12, fontSize: 14 },
-  modalTextarea: { height: 75, borderRadius: 10, padding: 12, textAlignVertical: 'top', marginBottom: 12, fontSize: 14 },
-  quickDeadlineRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
-  quickDeadlineChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
-  quickDeadlineText: { fontSize: 11.5, fontWeight: '600' },
+  modalTextarea: { height: 70, borderRadius: 10, padding: 12, textAlignVertical: 'top', marginBottom: 12, fontSize: 14 },
   folderChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, marginRight: 6 },
+  deadlineContainer: { marginBottom: 14 },
+  deadlineContainerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  deadlineToggleBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1 },
+  deadlinePickerCard: { padding: 12, borderRadius: 12, borderWidth: 1 },
+  deadlinePickerSubtitle: { fontSize: 11.5, marginBottom: 8 },
+  daysStepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 10 },
+  stepBtn: { width: 40, height: 36, borderRadius: 8, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  stepBtnText: { fontSize: 13, fontWeight: '700' },
+  daysDisplayBox: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', minWidth: 90 },
+  daysDisplayText: { fontSize: 18, fontWeight: '800' },
+  daysDisplayLabel: { fontSize: 10.5, fontWeight: '600', marginTop: -2 },
+  wheelScroll: { maxHeight: 36, marginBottom: 10 },
+  wheelScrollContent: { gap: 6, alignItems: 'center' },
+  wheelDayChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  wheelDayChipText: { fontSize: 11.5, fontWeight: '600' },
+  syncDateBadge: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 10, borderWidth: 1 },
+  syncDateTitle: { fontSize: 12.5, fontWeight: '700' },
+  syncDateSub: { fontSize: 11 },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
   modalBtn: { flex: 1, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
 });

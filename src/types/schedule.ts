@@ -25,35 +25,38 @@ export interface LessonStyleConfig {
   badgeBgLight: string;
 }
 
+export const hexToRgba = (hex: string, alpha: number): string => {
+  const cleanHex = hex.replace('#', '');
+  if (cleanHex.length !== 6) return `rgba(2, 132, 199, ${alpha})`;
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+export const getLessonStyleConfig = (type: LessonType, customColor?: string): LessonStyleConfig => {
+  const defaultColors: Record<LessonType, string> = {
+    'Лекция': '#0284c7',
+    'Практика': '#d97706',
+    'Лабораторная': '#c026d3',
+  };
+
+  const baseHex = customColor || defaultColors[type] || '#0284c7';
+
+  return {
+    label: type,
+    bgDark: hexToRgba(baseHex, 0.16),
+    bgLight: hexToRgba(baseHex, 0.12),
+    textDark: baseHex,
+    textLight: baseHex,
+    border: baseHex,
+    badgeBgDark: hexToRgba(baseHex, 0.28),
+    badgeBgLight: hexToRgba(baseHex, 0.2),
+  };
+};
+
 export const LESSON_COLORS: Record<LessonType, LessonStyleConfig> = {
-  'Лекция': {
-    label: 'Лекция',
-    bgDark: 'rgba(14, 165, 233, 0.15)',
-    bgLight: '#e0f2fe',
-    textDark: '#38bdf8',
-    textLight: '#0284c7',
-    border: '#0284c7',
-    badgeBgDark: 'rgba(56, 189, 248, 0.2)',
-    badgeBgLight: 'rgba(2, 132, 199, 0.15)',
-  },
-  'Практика': {
-    label: 'Практика',
-    bgDark: 'rgba(245, 158, 11, 0.15)',
-    bgLight: '#fef3c7',
-    textDark: '#fbbf24',
-    textLight: '#d97706',
-    border: '#d97706',
-    badgeBgDark: 'rgba(251, 191, 36, 0.2)',
-    badgeBgLight: 'rgba(217, 119, 6, 0.15)',
-  },
-  'Лабораторная': {
-    label: 'Лабораторная',
-    bgDark: 'rgba(217, 70, 239, 0.15)',
-    bgLight: '#fce7f3',
-    textDark: '#f0abfc',
-    textLight: '#c026d3',
-    border: '#c026d3',
-    badgeBgDark: 'rgba(240, 171, 252, 0.2)',
-    badgeBgLight: 'rgba(192, 38, 211, 0.15)',
-  },
+  'Лекция': getLessonStyleConfig('Лекция', '#0284c7'),
+  'Практика': getLessonStyleConfig('Практика', '#d97706'),
+  'Лабораторная': getLessonStyleConfig('Лабораторная', '#c026d3'),
 };

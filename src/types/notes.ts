@@ -3,6 +3,7 @@ export interface NoteFolder {
   name: string;
   color?: string;
   createdAt: number;
+  isPinned?: boolean;
 }
 
 export interface Note {
@@ -12,4 +13,5 @@ export interface Note {
   folderId: string | null;
   createdAt: number;
   updatedAt: number;
+  isPinned?: boolean;
 }

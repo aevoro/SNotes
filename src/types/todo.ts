@@ -3,6 +3,7 @@ export interface TodoFolder {
   name: string;
   color?: string;
   createdAt: number;
+  isPinned?: boolean;
 }
 
 export interface TodoItem {
@@ -15,4 +16,5 @@ export interface TodoItem {
   deadlineText?: string | null;
   createdAt: number;
   updatedAt: number;
+  isPinned?: boolean;
 }

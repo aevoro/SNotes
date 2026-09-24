@@ -35,7 +35,7 @@ import ScheduleScreen from './schedule';
 import RemindersScreen from './reminders';
 
 const appIcon = require('../../assets/images/snotes_icon.png');
-const CURRENT_APP_VERSION = '1.0.1';
+const CURRENT_APP_VERSION = '1.1.1';
 
 const TABS = [
   { key: 'notes', title: 'Заметки' },
@@ -513,8 +513,13 @@ export default function TabLayout() {
                   { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9', borderColor: theme.border, marginTop: 14 },
                 ]}>
                 <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text style={[styles.settingRowTitle, { color: theme.textPrimary, marginBottom: 0 }]}>
+                  <Text style={[styles.settingRowTitle, { color: theme.textPrimary }]}>
                     Уведомления
+                  </Text>
+                  <Text style={[styles.settingRowDesc, { color: theme.textSecondary }]}>
+                    {config.notificationsEnabled
+                      ? 'При завершении предыдущего занятия или за 5 минут'
+                      : 'Отключены'}
                   </Text>
                 </View>
                 <View
@@ -530,28 +535,6 @@ export default function TabLayout() {
                   />
                 </View>
               </TouchableOpacity>
-
-              {config.notificationsEnabled && (
-                <View style={styles.leadMinutesRow}>
-                  {[5, 10, 15, 30].map((mins) => {
-                    const isSel = (config.notificationLeadMinutes || 10) === mins;
-                    return (
-                      <TouchableOpacity
-                        key={mins}
-                        onPress={() => updateConfig({ notificationLeadMinutes: mins })}
-                        style={[
-                          styles.leadMinuteChip,
-                          { borderColor: theme.border },
-                          isSel && { backgroundColor: theme.pillBg, borderColor: theme.accent },
-                        ]}>
-                        <Text style={{ fontSize: 11.5, color: isSel ? theme.accent : theme.textSecondary }}>
-                          За {mins} мин
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
 
               {/* Расписание */}
               <Text style={[styles.sectionSubtitle, { color: theme.textSecondary, marginTop: 14 }]}>Расписание</Text>

@@ -110,13 +110,13 @@ export default function ScheduleScreen() {
         setSchedule(sortedStore);
         // Запланировать уведомления
         if (config.notificationsEnabled) {
-          scheduleLessonNotifications(sortedStore, config.notificationLeadMinutes || 10, true, isTwoWeeks);
+          scheduleLessonNotifications(sortedStore, true, isTwoWeeks);
         }
       } else {
         setSchedule(EMPTY_SCHEDULE);
       }
     });
-  }, [config.notificationsEnabled, config.notificationLeadMinutes, config.twoWeeksEnabled]);
+  }, [config.notificationsEnabled, config.twoWeeksEnabled]);
 
   const activeWeek: WeekNumber = isTwoWeeks ? numberOfWeek : 1;
 
@@ -183,7 +183,7 @@ export default function ScheduleScreen() {
 
     // Обновляем запланированные уведомления
     if (config.notificationsEnabled) {
-      scheduleLessonNotifications(updated, config.notificationLeadMinutes || 10, true, isTwoWeeks);
+      scheduleLessonNotifications(updated, true, isTwoWeeks);
     }
 
     setIsModalOpen(false);
@@ -202,7 +202,7 @@ export default function ScheduleScreen() {
     setSchedule(updated);
     await saveData(KEYS.SCHEDULE, updated);
     if (config.notificationsEnabled) {
-      scheduleLessonNotifications(updated, config.notificationLeadMinutes || 10, true, isTwoWeeks);
+      scheduleLessonNotifications(updated, true, isTwoWeeks);
     }
     if (isModalOpen && editingLessonId === id) {
       setIsModalOpen(false);
@@ -330,13 +330,6 @@ export default function ScheduleScreen() {
                     borderLeftWidth: 6,
                   },
                 ]}>
-                {/* Бейдж текущего занятия в правом верхнем углу */}
-                {isCurrentLesson && (
-                  <View style={[styles.currentLessonBadge, { right: isScheduleEditable ? 40 : 12 }]}>
-                    <Text style={styles.currentLessonText}>🔴 Текущее занятие</Text>
-                  </View>
-                )}
-
                 <View style={[styles.timeBlock, { borderRightColor: theme.border }]}>
                   <Text style={[styles.timeText, { color: theme.textPrimary }]}>{item.time}</Text>
                   <View style={[styles.typeBadge, { backgroundColor: badgeBg }]}>
@@ -345,9 +338,16 @@ export default function ScheduleScreen() {
                 </View>
 
                 <View style={styles.infoBlock}>
-                  <Text style={[styles.subjectText, { color: theme.textPrimary }]} numberOfLines={2}>
-                    {item.subject}
-                  </Text>
+                  <View style={styles.subjectRow}>
+                    <Text style={[styles.subjectText, { color: theme.textPrimary }]} numberOfLines={2}>
+                      {item.subject}
+                    </Text>
+                    {isCurrentLesson && (
+                      <View style={styles.currentLessonBadge}>
+                        <Text style={styles.currentLessonText}>🔴 Идет</Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={[styles.roomText, { color: theme.textSecondary }]}>Ауд. {item.room}</Text>
                 </View>
 
@@ -561,18 +561,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   currentLessonBadge: {
-    position: 'absolute',
-    top: 8,
     backgroundColor: 'rgba(239, 68, 68, 0.15)',
     borderColor: '#ef4444',
     borderWidth: 1,
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    zIndex: 1,
+    alignSelf: 'center',
   },
   currentLessonText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#ef4444',
   },
@@ -581,7 +579,14 @@ const styles = StyleSheet.create({
   typeBadge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start' },
   typeText: { fontSize: 11, fontWeight: '700' },
   infoBlock: { flex: 1, paddingLeft: 12, justifyContent: 'center' },
-  subjectText: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  subjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    gap: 8,
+  },
+  subjectText: { flex: 1, fontSize: 15, fontWeight: '700' },
   roomText: { fontSize: 12.5 },
   deleteBtn: { padding: 6, marginLeft: 8 },
   fab: {

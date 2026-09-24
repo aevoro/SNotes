@@ -55,10 +55,14 @@ export default function TabLayout() {
   const { theme, setMode, isScheduleEditable, toggleScheduleEditable } = useAppTheme();
   const { config, updateConfig, updateInitialScreen } = useConfig();
   const { width: screenWidth } = useWindowDimensions();
+  const screenWidthRef = useRef(screenWidth);
+  screenWidthRef.current = screenWidth;
 
   const [activeIndex, setActiveIndex] = useState(0);
   const activeIndexRef = useRef(0);
   activeIndexRef.current = activeIndex;
+
+  const goToTabRef = useRef<(idx: number) => void>(() => {});
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingSlots, setEditingSlots] = useState<LessonTimeSlot[]>([]);
@@ -73,6 +77,11 @@ export default function TabLayout() {
 
   // Анимированное смещение экранов
   const pageTranslateX = useRef(new Animated.Value(0)).current;
+
+  // Синхронизация смещения экранов при изменении ширины окна (респонсив, поворот)
+  useEffect(() => {
+    pageTranslateX.setValue(-activeIndexRef.current * screenWidth);
+  }, [screenWidth]);
 
   // Автопроверка обновлений на GitHub при запуске
   useEffect(() => {
@@ -160,15 +169,17 @@ export default function TabLayout() {
   });
 
   const goToTab = (index: number) => {
+    const sw = screenWidthRef.current;
     setActiveIndex(index);
     Animated.spring(pageTranslateX, {
-      toValue: -index * screenWidth,
+      toValue: -index * sw,
       damping: 22,
       stiffness: 200,
       mass: 0.8,
       useNativeDriver: true,
     }).start();
   };
+  goToTabRef.current = goToTab;
 
   const panResponder = useRef(
     PanResponder.create({
@@ -176,14 +187,15 @@ export default function TabLayout() {
         return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
       },
       onPanResponderMove: (_, gestureState) => {
-        const baseOffset = -activeIndexRef.current * screenWidth;
+        const sw = screenWidthRef.current;
+        const baseOffset = -activeIndexRef.current * sw;
         let nextOffset = baseOffset + gestureState.dx;
 
         if (nextOffset > 0) {
           nextOffset = gestureState.dx * 0.25;
-        } else if (nextOffset < -2 * screenWidth) {
-          const over = nextOffset - (-2 * screenWidth);
-          nextOffset = -2 * screenWidth + over * 0.25;
+        } else if (nextOffset < -2 * sw) {
+          const over = nextOffset - (-2 * sw);
+          nextOffset = -2 * sw + over * 0.25;
         }
 
         pageTranslateX.setValue(nextOffset);
@@ -192,12 +204,15 @@ export default function TabLayout() {
         const currentIdx = activeIndexRef.current;
 
         if (gestureState.dx < -SWIPE_THRESHOLD && currentIdx < 2) {
-          goToTab(currentIdx + 1);
+          goToTabRef.current(currentIdx + 1);
         } else if (gestureState.dx > SWIPE_THRESHOLD && currentIdx > 0) {
-          goToTab(currentIdx - 1);
+          goToTabRef.current(currentIdx - 1);
         } else {
-          goToTab(currentIdx);
+          goToTabRef.current(currentIdx);
         }
+      },
+      onPanResponderTerminate: () => {
+        goToTabRef.current(activeIndexRef.current);
       },
     })
   ).current;
@@ -840,6 +855,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     overflow: 'hidden',
+    height: Platform.OS === 'web' ? ('100vh' as any) : '100%',
+    width: '100%',
   },
   header: {
     height: 56,

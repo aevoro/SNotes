@@ -19,6 +19,7 @@ import {
   isLessonCurrentlyActive,
 } from '../../src/utils/scheduleUtils';
 import { scheduleLessonNotifications } from '../../src/services/notificationService';
+import { ScrollableWithBar } from '../../src/components/ScrollableWithBar';
 
 export type WeekNumber = 1 | 2;
 
@@ -287,7 +288,7 @@ export default function ScheduleScreen() {
       </View>
 
       {/* Список занятий */}
-      <ScrollView contentContainerStyle={styles.list}>
+      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={true}>
         {currentLessons.length === 0 ? (
           <View style={styles.empty}>
             <Text style={{ fontSize: 40, marginBottom: 12 }}>📅</Text>
@@ -387,7 +388,10 @@ export default function ScheduleScreen() {
             onPress={() => setIsModalOpen(false)}
           />
           <View style={[styles.modalSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollableWithBar
+              indicatorColor={theme.accent}
+              trackRightOffset={-8}
+              trackColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}>
               <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
                 {editingLessonId ? 'Редактировать занятие' : `Новое занятие (${DAYS[selectedDay]})`}
               </Text>
@@ -533,7 +537,7 @@ export default function ScheduleScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
-            </ScrollView>
+            </ScrollableWithBar>
           </View>
         </View>
       </Modal>

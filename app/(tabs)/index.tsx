@@ -371,7 +371,7 @@ export default function NotesScreen() {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={styles.scrollListContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scrollListContainer} showsVerticalScrollIndicator={true}>
         {/* Пустое состояние, если вообще нет записей и папок */}
         {isEntirelyEmpty ? (
           <View style={styles.emptyState}>
@@ -569,7 +569,7 @@ export default function NotesScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={styles.noteViewContent}>
+          <ScrollView contentContainerStyle={styles.noteViewContent} showsVerticalScrollIndicator={true}>
             <TextInput
               value={editTitle}
               onChangeText={setEditTitle}

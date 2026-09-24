@@ -16,6 +16,7 @@ import {
 import { useAppTheme } from '../../context/ThemeContext';
 import { useTodo } from '../../context/TodoContext';
 import { TodoItem } from '../../src/types/todo';
+import { ScrollableWithBar } from '../../src/components/ScrollableWithBar';
 
 const MONTHS = [
   { value: 1, name: 'Январь', short: 'Янв' },
@@ -552,7 +553,7 @@ export default function RemindersScreen() {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={styles.scrollListContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scrollListContainer} showsVerticalScrollIndicator={true}>
         {/* Пустое состояние, если вообще нет задач и папок */}
         {isEntirelyEmpty ? (
           <View style={styles.emptyState}>
@@ -731,7 +732,10 @@ export default function RemindersScreen() {
             onPress={() => setIsModalOpen(false)}
           />
           <View style={[styles.createSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollableWithBar
+              indicatorColor={theme.accent}
+              trackRightOffset={-8}
+              trackColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}>
               <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
                 {activeTodo ? 'Редактировать задачу' : 'Новая задача'}
               </Text>
@@ -953,7 +957,7 @@ export default function RemindersScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
-            </ScrollView>
+            </ScrollableWithBar>
           </View>
         </View>
       </Modal>

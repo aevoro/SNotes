@@ -16,6 +16,7 @@ import {
   ToastAndroid,
   Linking,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useConfig } from '../../context/ConfigContext';
@@ -29,6 +30,7 @@ import { LessonType } from '../../src/types/schedule';
 import { calculateEndTime } from '../../src/utils/scheduleUtils';
 import { checkGitHubUpdate, UpdateInfo } from '../../src/services/updateService';
 import { requestNotificationPermissions } from '../../src/services/notificationService';
+import { ScrollableWithBar } from '../../src/components/ScrollableWithBar';
 
 import NotesScreen from '.';
 import ScheduleScreen from './schedule';
@@ -404,7 +406,11 @@ export default function TabLayout() {
             onPress={() => setIsSettingsOpen(false)}
           />
           <View style={[styles.modalSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <ScrollView style={{ maxHeight: 540 }} showsVerticalScrollIndicator={false}>
+            <ScrollableWithBar
+              style={{ maxHeight: Math.min(540, Dimensions.get('window').height * 0.78) }}
+              indicatorColor={theme.accent}
+              trackRightOffset={-8}
+              trackColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}>
               <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Настройки</Text>
 
               {/* Тема */}
@@ -650,7 +656,7 @@ export default function TabLayout() {
                 style={[styles.closeBtn, { backgroundColor: theme.surface, marginTop: 18 }]}>
                 <Text style={[styles.closeBtnText, { color: theme.textPrimary }]}>Готово</Text>
               </TouchableOpacity>
-            </ScrollView>
+            </ScrollableWithBar>
           </View>
         </View>
       </Modal>
@@ -751,7 +757,11 @@ export default function TabLayout() {
               )}
             </View>
 
-            <ScrollView style={{ maxHeight: 220, marginBottom: 10 }}>
+            <ScrollableWithBar
+              style={{ maxHeight: 220, marginBottom: 10 }}
+              indicatorColor={theme.accent}
+              trackRightOffset={-8}
+              trackColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}>
               {editingSlots.length === 0 ? (
                 <Text style={{ color: theme.textSecondary, fontSize: 13, textAlign: 'center', marginVertical: 14 }}>
                   Список слотов пуст. Нажмите «+ Добавить слот» ниже
@@ -794,7 +804,7 @@ export default function TabLayout() {
                   );
                 })
               )}
-            </ScrollView>
+            </ScrollableWithBar>
 
             {/* Кнопка добавления слота до 8 */}
             {editingSlots.length < 8 && (

@@ -388,13 +388,16 @@ export default function ScheduleScreen() {
             onPress={() => setIsModalOpen(false)}
           />
           <View style={[styles.modalSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
+              {editingLessonId ? 'Редактировать занятие' : `Новое занятие (${DAYS[selectedDay]})`}
+            </Text>
+
             <ScrollableWithBar
+              style={{ flexGrow: 0, flexShrink: 1 }}
+              contentContainerStyle={{ paddingBottom: 4 }}
               indicatorColor={theme.accent}
-              trackRightOffset={-8}
+              trackRightOffset={-6}
               trackColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}>
-              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
-                {editingLessonId ? 'Редактировать занятие' : `Новое занятие (${DAYS[selectedDay]})`}
-              </Text>
 
               {!editingLessonId && isTwoWeeks && (
                 <>
@@ -522,22 +525,22 @@ export default function ScheduleScreen() {
                   );
                 })}
               </View>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  onPress={() => setIsModalOpen(false)}
-                  style={[styles.modalBtn, { backgroundColor: theme.surface }]}>
-                  <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>Отмена</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleSaveLesson}
-                  style={[styles.modalBtn, { backgroundColor: theme.accent }]}>
-                  <Text style={{ color: '#ffffff', fontWeight: '700' }}>
-                    {editingLessonId ? 'Сохранить' : 'Добавить'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
             </ScrollableWithBar>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                onPress={() => setIsModalOpen(false)}
+                style={[styles.modalBtn, { backgroundColor: theme.surface }]}>
+                <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>Отмена</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSaveLesson}
+                style={[styles.modalBtn, { backgroundColor: theme.accent }]}>
+                <Text style={{ color: '#ffffff', fontWeight: '700' }}>
+                  {editingLessonId ? 'Сохранить' : 'Добавить'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -612,8 +615,18 @@ const styles = StyleSheet.create({
   plusHorizontal: { position: 'absolute', width: 18, height: 2.5, backgroundColor: '#ffffff', borderRadius: 2 },
   plusVertical: { position: 'absolute', width: 2.5, height: 18, backgroundColor: '#ffffff', borderRadius: 2 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalSheet: { width: '100%', maxWidth: 360, maxHeight: 560, borderRadius: 20, padding: 20, borderWidth: 1, zIndex: 2 },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 14, textAlign: 'center' },
+  modalSheet: {
+    width: '100%',
+    maxWidth: 360,
+    maxHeight: '90%',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    zIndex: 2,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
   fieldLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 0.5 },
   targetWeekRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
   targetWeekBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
@@ -625,6 +638,6 @@ const styles = StyleSheet.create({
   typeSelectorRow: { flexDirection: 'row', gap: 6, marginBottom: 16 },
   typeSelectorBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center', borderWidth: 1.5 },
   typeSelectorText: { fontSize: 11.5, fontWeight: '700' },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   modalBtn: { flex: 1, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
 });

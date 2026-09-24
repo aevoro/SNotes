@@ -732,14 +732,16 @@ export default function RemindersScreen() {
             onPress={() => setIsModalOpen(false)}
           />
           <View style={[styles.createSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <ScrollableWithBar
-              indicatorColor={theme.accent}
-              trackRightOffset={-8}
-              trackColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}>
-              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
-                {activeTodo ? 'Редактировать задачу' : 'Новая задача'}
-              </Text>
+            <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
+              {activeTodo ? 'Редактировать задачу' : 'Новая задача'}
+            </Text>
 
+            <ScrollableWithBar
+              style={{ flexGrow: 0, flexShrink: 1 }}
+              contentContainerStyle={{ paddingBottom: 4 }}
+              indicatorColor={theme.accent}
+              trackRightOffset={-6}
+              trackColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Название задачи</Text>
               <TextInput
                 placeholder="Что нужно сделать..."
@@ -942,22 +944,22 @@ export default function RemindersScreen() {
                   </View>
                 )}
               </View>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  onPress={() => setIsModalOpen(false)}
-                  style={[styles.modalBtn, { backgroundColor: theme.surface }]}>
-                  <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>Отмена</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleSaveTodo}
-                  style={[styles.modalBtn, { backgroundColor: theme.accent }]}>
-                  <Text style={{ color: '#ffffff', fontWeight: '700' }}>
-                    {activeTodo ? 'Сохранить' : 'Создать'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
             </ScrollableWithBar>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                onPress={() => setIsModalOpen(false)}
+                style={[styles.modalBtn, { backgroundColor: theme.surface }]}>
+                <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>Отмена</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSaveTodo}
+                style={[styles.modalBtn, { backgroundColor: theme.accent }]}>
+                <Text style={{ color: '#ffffff', fontWeight: '700' }}>
+                  {activeTodo ? 'Сохранить' : 'Создать'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1131,8 +1133,19 @@ const styles = StyleSheet.create({
   plusVertical: { position: 'absolute', width: 2.5, height: 18, backgroundColor: '#ffffff', borderRadius: 2 },
   modalBackdrop: { flex: 1, position: 'relative', backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   backdropTouchable: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 },
-  createSheet: { width: '100%', maxWidth: 360, maxHeight: 580, borderRadius: 20, padding: 20, borderWidth: 1, zIndex: 10, position: 'relative' },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 14, textAlign: 'center' },
+  createSheet: {
+    width: '100%',
+    maxWidth: 360,
+    maxHeight: '90%',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    zIndex: 10,
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
   fieldLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 },
   modalInput: { height: 42, borderRadius: 10, paddingHorizontal: 12, marginBottom: 12, fontSize: 14 },
   modalTextarea: { height: 70, borderRadius: 10, padding: 12, textAlignVertical: 'top', marginBottom: 12, fontSize: 14 },
@@ -1189,6 +1202,6 @@ const styles = StyleSheet.create({
   syncDateBadge: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 10, borderWidth: 1 },
   syncDateTitle: { fontSize: 12.5, fontWeight: '700' },
   syncDateSub: { fontSize: 11 },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   modalBtn: { flex: 1, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
 });

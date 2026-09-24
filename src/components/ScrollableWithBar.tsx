@@ -132,6 +132,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flexGrow: 0,
+    flexShrink: 1,
   },
   track: {
     position: 'absolute',

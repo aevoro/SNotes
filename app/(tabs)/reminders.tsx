@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -16,6 +16,38 @@ import {
 import { useAppTheme } from '../../context/ThemeContext';
 import { useTodo } from '../../context/TodoContext';
 import { TodoItem } from '../../src/types/todo';
+
+const MONTHS = [
+  { value: 1, name: 'Январь', short: 'Янв' },
+  { value: 2, name: 'Февраль', short: 'Фев' },
+  { value: 3, name: 'Март', short: 'Мар' },
+  { value: 4, name: 'Апрель', short: 'Апр' },
+  { value: 5, name: 'Май', short: 'Май' },
+  { value: 6, name: 'Июнь', short: 'Июн' },
+  { value: 7, name: 'Июль', short: 'Июл' },
+  { value: 8, name: 'Август', short: 'Авг' },
+  { value: 9, name: 'Сентябрь', short: 'Сен' },
+  { value: 10, name: 'Октябрь', short: 'Окт' },
+  { value: 11, name: 'Ноябрь', short: 'Ноя' },
+  { value: 12, name: 'Декабрь', short: 'Дек' },
+];
+
+const WHEEL_ITEM_HEIGHT = 44;
+const WHEEL_VISIBLE_COUNT = 3;
+const WHEEL_CONTAINER_HEIGHT = WHEEL_ITEM_HEIGHT * WHEEL_VISIBLE_COUNT; // 132
+const WHEEL_PADDING = (WHEEL_CONTAINER_HEIGHT - WHEEL_ITEM_HEIGHT) / 2; // 44
+
+function getDaysInMonth(month: number, year: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+function getTargetYear(day: number, month: number): number {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const startOfToday = new Date(currentYear, now.getMonth(), now.getDate()).getTime();
+  const targetDateCurrentYear = new Date(currentYear, month - 1, day).getTime();
+  return targetDateCurrentYear < startOfToday ? currentYear + 1 : currentYear;
+}
 
 function getDaysWord(n: number): string {
   const mod10 = n % 10;
@@ -187,9 +219,52 @@ export default function RemindersScreen() {
   const [description, setDescription] = useState('');
   const [targetFolderId, setTargetFolderId] = useState<string | null>(null);
 
-  // Дедлайн: выбор колесом/скроллом от 1 до 365 дней
+  // Дедлайн: выбор барабаном (день и месяц) как в часах/будильнике
   const [hasDeadline, setHasDeadline] = useState(false);
-  const [deadlineDays, setDeadlineDays] = useState(1);
+  const [selectedDay, setSelectedDay] = useState(1);
+  const [selectedMonth, setSelectedMonth] = useState(1);
+
+  const dayScrollRef = useRef<ScrollView>(null);
+  const monthScrollRef = useRef<ScrollView>(null);
+
+  const targetYear = getTargetYear(selectedDay, selectedMonth);
+  const maxDays = getDaysInMonth(selectedMonth, targetYear);
+  const daysList = useMemo(() => Array.from({ length: maxDays }, (_, i) => i + 1), [maxDays]);
+
+  const scrollToWheelPositions = (d: number, m: number, animated: boolean = false) => {
+    setTimeout(() => {
+      dayScrollRef.current?.scrollTo({ y: Math.max(0, (d - 1) * WHEEL_ITEM_HEIGHT), animated });
+      monthScrollRef.current?.scrollTo({ y: Math.max(0, (m - 1) * WHEEL_ITEM_HEIGHT), animated });
+    }, 80);
+  };
+
+  const handleSelectMonth = (m: number) => {
+    setSelectedMonth(m);
+    const yr = getTargetYear(selectedDay, m);
+    const daysInNewMonth = getDaysInMonth(m, yr);
+    if (selectedDay > daysInNewMonth) {
+      setSelectedDay(daysInNewMonth);
+      dayScrollRef.current?.scrollTo({ y: (daysInNewMonth - 1) * WHEEL_ITEM_HEIGHT, animated: true });
+    }
+  };
+
+  const onDayScrollEnd = (e: any) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const idx = Math.max(0, Math.min(daysList.length - 1, Math.round(y / WHEEL_ITEM_HEIGHT)));
+    const d = daysList[idx];
+    if (d && d !== selectedDay) {
+      setSelectedDay(d);
+    }
+  };
+
+  const onMonthScrollEnd = (e: any) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const idx = Math.max(0, Math.min(MONTHS.length - 1, Math.round(y / WHEEL_ITEM_HEIGHT)));
+    const m = MONTHS[idx]?.value;
+    if (m && m !== selectedMonth) {
+      handleSelectMonth(m);
+    }
+  };
 
   // Обработка жеста / кнопки «Назад»
   useEffect(() => {
@@ -254,8 +329,14 @@ export default function RemindersScreen() {
     setDescription('');
     setTargetFolderId(activeFolderId);
     setHasDeadline(false);
-    setDeadlineDays(1);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const d = tomorrow.getDate();
+    const m = tomorrow.getMonth() + 1;
+    setSelectedDay(d);
+    setSelectedMonth(m);
     setIsModalOpen(true);
+    scrollToWheelPositions(d, m, false);
   };
 
   const openEditModal = (todo: TodoItem) => {
@@ -265,13 +346,30 @@ export default function RemindersScreen() {
     setTargetFolderId(todo.folderId);
     if (todo.deadline) {
       setHasDeadline(true);
-      const diff = Math.max(1, Math.min(365, Math.ceil((todo.deadline - Date.now()) / (24 * 3600 * 1000))));
-      setDeadlineDays(diff);
+      const d = new Date(todo.deadline);
+      const dDay = d.getDate();
+      const dMonth = d.getMonth() + 1;
+      setSelectedDay(dDay);
+      setSelectedMonth(dMonth);
+      scrollToWheelPositions(dDay, dMonth, false);
     } else {
       setHasDeadline(false);
-      setDeadlineDays(1);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const d = tomorrow.getDate();
+      const m = tomorrow.getMonth() + 1;
+      setSelectedDay(d);
+      setSelectedMonth(m);
     }
     setIsModalOpen(true);
+  };
+
+  const toggleDeadline = () => {
+    const next = !hasDeadline;
+    setHasDeadline(next);
+    if (next) {
+      scrollToWheelPositions(selectedDay, selectedMonth, false);
+    }
   };
 
   const handleSaveTodo = async () => {
@@ -281,9 +379,8 @@ export default function RemindersScreen() {
     let deadlineStr: string | null = null;
 
     if (hasDeadline) {
-      const d = new Date();
-      d.setDate(d.getDate() + deadlineDays);
-      d.setHours(23, 59, 59, 999);
+      const yr = getTargetYear(selectedDay, selectedMonth);
+      const d = new Date(yr, selectedMonth - 1, selectedDay, 23, 59, 59, 999);
       deadlineTs = d.getTime();
       deadlineStr = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
     }
@@ -403,15 +500,25 @@ export default function RemindersScreen() {
     );
   };
 
-  const targetDeadlineDate = new Date();
-  targetDeadlineDate.setDate(targetDeadlineDate.getDate() + deadlineDays);
-  targetDeadlineDate.setHours(23, 59, 59, 999);
-  const formattedDeadlineDate = targetDeadlineDate.toLocaleDateString('ru-RU', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const computedDeadline = useMemo(() => {
+    if (!hasDeadline) return null;
+    const now = new Date();
+    const yr = getTargetYear(selectedDay, selectedMonth);
+    const target = new Date(yr, selectedMonth - 1, selectedDay, 23, 59, 59, 999);
+
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startOfTarget = new Date(yr, selectedMonth - 1, selectedDay).getTime();
+    const diffDays = Math.round((startOfTarget - startOfToday) / (24 * 3600 * 1000));
+
+    const dateStr = target.toLocaleDateString('ru-RU', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+
+    return { target, diffDays, dateStr };
+  }, [hasDeadline, selectedDay, selectedMonth]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -695,7 +802,7 @@ export default function RemindersScreen() {
                     Дедлайн задачи
                   </Text>
                   <TouchableOpacity
-                    onPress={() => setHasDeadline(!hasDeadline)}
+                    onPress={toggleDeadline}
                     style={[
                       styles.deadlineToggleBtn,
                       {
@@ -711,77 +818,120 @@ export default function RemindersScreen() {
 
                 {hasDeadline && (
                   <View style={[styles.deadlinePickerCard, { backgroundColor: theme.mode === 'dark' ? '#27272a' : '#f1f5f9', borderColor: theme.border }]}>
-                    <Text style={[styles.deadlinePickerSubtitle, { color: theme.textSecondary }]}>
-                      Количество дней до дедлайна (от 1 до 365):
-                    </Text>
-
-                    {/* Кнопки шага и счетчик дней */}
-                    <View style={styles.daysStepperRow}>
-                      <TouchableOpacity
-                        onPress={() => setDeadlineDays(Math.max(1, deadlineDays - 10))}
-                        style={[styles.stepBtn, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                        <Text style={[styles.stepBtnText, { color: theme.textPrimary }]}>-10</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setDeadlineDays(Math.max(1, deadlineDays - 1))}
-                        style={[styles.stepBtn, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                        <Text style={[styles.stepBtnText, { color: theme.textPrimary }]}>-1</Text>
-                      </TouchableOpacity>
-
-                      <View style={[styles.daysDisplayBox, { backgroundColor: theme.pillBg, borderColor: theme.accent }]}>
-                        <Text style={[styles.daysDisplayText, { color: theme.accent }]}>
-                          {deadlineDays}
-                        </Text>
-                        <Text style={[styles.daysDisplayLabel, { color: theme.textSecondary }]}>
-                          {getDaysWord(deadlineDays)}
-                        </Text>
-                      </View>
-
-                      <TouchableOpacity
-                        onPress={() => setDeadlineDays(Math.min(365, deadlineDays + 1))}
-                        style={[styles.stepBtn, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                        <Text style={[styles.stepBtnText, { color: theme.textPrimary }]}>+1</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setDeadlineDays(Math.min(365, deadlineDays + 10))}
-                        style={[styles.stepBtn, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                        <Text style={[styles.stepBtnText, { color: theme.textPrimary }]}>+10</Text>
-                      </TouchableOpacity>
+                    {/* Подписи столбцов */}
+                    <View style={styles.wheelHeaderRow}>
+                      <Text style={[styles.wheelColLabel, { color: theme.textSecondary }]}>ДЕНЬ</Text>
+                      <Text style={[styles.wheelColLabel, { color: theme.textSecondary }]}>МЕСЯЦ</Text>
                     </View>
 
-                    {/* Колесо / горизонтальный скролл выбора дней */}
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.wheelScrollContent}
-                      style={styles.wheelScroll}>
-                      {[1, 2, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 120, 180, 240, 300, 365].map((d) => {
-                        const isSel = deadlineDays === d;
-                        return (
-                          <TouchableOpacity
-                            key={d}
-                            onPress={() => setDeadlineDays(d)}
-                            style={[
-                              styles.wheelDayChip,
-                              { borderColor: theme.border, backgroundColor: isSel ? theme.accent : theme.card },
-                            ]}>
-                            <Text style={[styles.wheelDayChipText, { color: isSel ? '#ffffff' : theme.textPrimary }]}>
-                              {d} {getDaysWord(d)}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
+                    {/* Барабаны прокрутки */}
+                    <View style={styles.wheelPickerWrapper}>
+                      {/* Селекторная рамка по центру барабанов */}
+                      <View
+                        pointerEvents="none"
+                        style={[
+                          styles.wheelCenterHighlight,
+                          {
+                            top: WHEEL_PADDING,
+                            height: WHEEL_ITEM_HEIGHT,
+                            backgroundColor: theme.pillBg,
+                            borderColor: theme.accent,
+                          },
+                        ]}
+                      />
+
+                      {/* Столбик: ДЕНЬ (01 .. maxDays в зависимости от месяца) */}
+                      <View style={styles.wheelColumn}>
+                        <ScrollView
+                          ref={dayScrollRef}
+                          nestedScrollEnabled
+                          showsVerticalScrollIndicator={false}
+                          snapToInterval={WHEEL_ITEM_HEIGHT}
+                          decelerationRate="fast"
+                          contentContainerStyle={{ paddingVertical: WHEEL_PADDING }}
+                          onMomentumScrollEnd={onDayScrollEnd}
+                          onScrollEndDrag={onDayScrollEnd}
+                          style={{ height: WHEEL_CONTAINER_HEIGHT }}>
+                          {daysList.map((d) => {
+                            const isSel = selectedDay === d;
+                            return (
+                              <TouchableOpacity
+                                key={d}
+                                activeOpacity={0.7}
+                                onPress={() => {
+                                  setSelectedDay(d);
+                                  dayScrollRef.current?.scrollTo({ y: (d - 1) * WHEEL_ITEM_HEIGHT, animated: true });
+                                }}
+                                style={[styles.wheelItem, { height: WHEEL_ITEM_HEIGHT }]}>
+                                <Text
+                                  style={[
+                                    styles.wheelItemText,
+                                    isSel
+                                      ? { color: theme.accent, fontWeight: '800', fontSize: 17 }
+                                      : { color: theme.textSecondary, opacity: 0.4, fontSize: 14 },
+                                  ]}>
+                                  {d.toString().padStart(2, '0')}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+
+                      <View style={[styles.wheelDivider, { backgroundColor: theme.border }]} />
+
+                      {/* Столбик: МЕСЯЦ (01 .. 12) */}
+                      <View style={[styles.wheelColumn, { flex: 1.4 }]}>
+                        <ScrollView
+                          ref={monthScrollRef}
+                          nestedScrollEnabled
+                          showsVerticalScrollIndicator={false}
+                          snapToInterval={WHEEL_ITEM_HEIGHT}
+                          decelerationRate="fast"
+                          contentContainerStyle={{ paddingVertical: WHEEL_PADDING }}
+                          onMomentumScrollEnd={onMonthScrollEnd}
+                          onScrollEndDrag={onMonthScrollEnd}
+                          style={{ height: WHEEL_CONTAINER_HEIGHT }}>
+                          {MONTHS.map((m) => {
+                            const isSel = selectedMonth === m.value;
+                            return (
+                              <TouchableOpacity
+                                key={m.value}
+                                activeOpacity={0.7}
+                                onPress={() => {
+                                  handleSelectMonth(m.value);
+                                  monthScrollRef.current?.scrollTo({ y: (m.value - 1) * WHEEL_ITEM_HEIGHT, animated: true });
+                                }}
+                                style={[styles.wheelItem, { height: WHEEL_ITEM_HEIGHT }]}>
+                                <Text
+                                  style={[
+                                    styles.wheelItemText,
+                                    isSel
+                                      ? { color: theme.accent, fontWeight: '800', fontSize: 15.5 }
+                                      : { color: theme.textSecondary, opacity: 0.4, fontSize: 13.5 },
+                                  ]}>
+                                  {m.value.toString().padStart(2, '0')} • {m.name}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    </View>
 
                     {/* Синхронизированный день и дата под выбором */}
-                    <View style={[styles.syncDateBadge, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={[styles.syncDateBadge, { backgroundColor: theme.card, borderColor: theme.border, marginTop: 10 }]}>
                       <Text style={{ fontSize: 18, marginRight: 8 }}>📅</Text>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.syncDateTitle, { color: theme.accent }]}>
-                          Дедлайн: {formattedDeadlineDate}
+                          Дедлайн: {computedDeadline?.dateStr}
                         </Text>
                         <Text style={[styles.syncDateSub, { color: theme.textSecondary }]}>
-                          через {deadlineDays} {getDaysWord(deadlineDays)}
+                          {computedDeadline?.diffDays === 0
+                            ? 'сегодня'
+                            : computedDeadline?.diffDays === 1
+                            ? 'завтра'
+                            : `через ${computedDeadline?.diffDays} ${getDaysWord(computedDeadline?.diffDays || 0)}`}
                         </Text>
                       </View>
                     </View>
@@ -987,17 +1137,51 @@ const styles = StyleSheet.create({
   deadlineContainerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   deadlineToggleBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1 },
   deadlinePickerCard: { padding: 12, borderRadius: 12, borderWidth: 1 },
-  deadlinePickerSubtitle: { fontSize: 11.5, marginBottom: 8 },
-  daysStepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 10 },
-  stepBtn: { width: 40, height: 36, borderRadius: 8, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  stepBtnText: { fontSize: 13, fontWeight: '700' },
-  daysDisplayBox: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', minWidth: 90 },
-  daysDisplayText: { fontSize: 18, fontWeight: '800' },
-  daysDisplayLabel: { fontSize: 10.5, fontWeight: '600', marginTop: -2 },
-  wheelScroll: { maxHeight: 36, marginBottom: 10 },
-  wheelScrollContent: { gap: 6, alignItems: 'center' },
-  wheelDayChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
-  wheelDayChipText: { fontSize: 11.5, fontWeight: '600' },
+  wheelHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 4,
+    paddingHorizontal: 8,
+  },
+  wheelColLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  wheelPickerWrapper: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  wheelCenterHighlight: {
+    position: 'absolute',
+    left: 4,
+    right: 4,
+    borderWidth: 1.5,
+    borderRadius: 10,
+    zIndex: 1,
+  },
+  wheelColumn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wheelDivider: {
+    width: 1,
+    height: 70,
+    opacity: 0.5,
+  },
+  wheelItem: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  wheelItemText: {
+    textAlign: 'center',
+  },
   syncDateBadge: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 10, borderWidth: 1 },
   syncDateTitle: { fontSize: 12.5, fontWeight: '700' },
   syncDateSub: { fontSize: 11 },

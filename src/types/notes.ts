@@ -1,10 +1,6 @@
-export interface NoteFolder {
-  id: string;
-  name: string;
-  color?: string;
-  createdAt: number;
-  isPinned?: boolean;
-}
+import { AppFolder } from './folders';
+
+export type NoteFolder = AppFolder;
 
 export interface Note {
   id: string;

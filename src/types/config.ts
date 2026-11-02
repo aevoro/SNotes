@@ -1,6 +1,6 @@
-import { LessonType } from './schedule';
+import { LessonType, DEFAULT_EVENT_COLORS } from './schedule';
 
-export type InitialScreenType = 'Schedule' | 'Notes' | 'Todo';
+export type InitialScreenType = 'Schedule' | 'Notes' | 'Todo' | 'Calendar' | 'Settings';
 
 export interface LessonTimeSlot {
   lessonNumber: number;
@@ -12,29 +12,41 @@ export interface AppConfig {
   initialScreen: InitialScreenType;
   defaultDurationMinutes: number;
   timeSlots: LessonTimeSlot[];
-  customLessonColors?: Partial<Record<LessonType, string>>;
+  customLessonColors?: Record<string, string>;
   notificationsEnabled?: boolean;
   notificationLeadMinutes?: number;
   twoWeeksEnabled?: boolean;
   githubRepo?: string;
+  eventCategories?: string[];
+  calendarEventMarkerColor?: string;
+  calendarDeadlineMarkerColor?: string;
 }
 
-export const DEFAULT_LESSON_COLORS: Record<LessonType, string> = {
-  'Лекция': '#0284c7', // Sky Blue
-  'Практика': '#d97706', // Amber / Orange
-  'Лабораторная': '#c026d3', // Fuchsia / Purple
-};
+export const DEFAULT_LESSON_COLORS: Record<string, string> = DEFAULT_EVENT_COLORS;
 
 export const COLOR_PALETTE = [
+  '#0a84ff', // Cupertino Blue
   '#0284c7', // Синий
-  '#0d9488', // Бирюзовый / Изумрудный
+  '#10b981', // Изумрудный
   '#16a34a', // Зеленый
-  '#d97706', // Оранжевый / Янтарный
+  '#d97706', // Янтарный
+  '#f97316', // Оранжевый
   '#dc2626', // Красный
-  '#c026d3', // Фиолетовый / Пурпурный
-  '#e11d48', // Розовый
-  '#4f46e5', // Индиго
-  '#475569', // Графитовый
+  '#c026d3', // Фиолетовый
+  '#ec4899', // Розовый
+  '#6366f1', // Индиго
+  '#64748b', // Графитовый
+];
+
+export const STANDARD_CATEGORIES: string[] = [
+  'Учеба',
+  'Лекция',
+  'Практика',
+  'Лабораторная',
+  'Встреча',
+  'Тренировка',
+  'Работа',
+  'Личное',
 ];
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -46,4 +58,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   notificationLeadMinutes: 10,
   twoWeeksEnabled: true,
   githubRepo: 'aevoro/SNotes',
+  eventCategories: STANDARD_CATEGORIES,
+  calendarEventMarkerColor: '#0a84ff',
+  calendarDeadlineMarkerColor: '#ff453a',
 };

@@ -1,7 +1,9 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { ScheduleStore, Lesson } from '../../app/(tabs)/schedule';
+import { Lesson } from '../types/schedule';
 import { getCurrentWeekNumber } from '../utils/scheduleUtils';
+
+export type WeeklyScheduleStore = Record<number, Record<number, Lesson[]>>;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -20,7 +22,7 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
         name: 'Уведомления о занятиях',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#3b82f6',
+        lightColor: '#0a84ff',
         sound: 'default',
         enableVibrate: true,
         showBadge: false,
@@ -75,7 +77,7 @@ const parseTimes = (timeStr: string): LessonTimeParsed | null => {
 
 // Планирование пуш-уведомлений о занятиях на ближайшие дни
 export const scheduleLessonNotifications = async (
-  schedule: ScheduleStore,
+  schedule: WeeklyScheduleStore,
   enabled: boolean = true,
   twoWeeksEnabled: boolean = true
 ): Promise<void> => {
@@ -105,12 +107,12 @@ export const scheduleLessonNotifications = async (
 
       const dayIdx = jsDay - 1; // 0..5
       const weekNumForDay = twoWeeksEnabled ? getCurrentWeekNumber(targetDate) : 1;
-      const dayLessons = schedule[weekNumForDay]?.[dayIdx] || [];
+      const dayLessons: Lesson[] = schedule[weekNumForDay]?.[dayIdx] || [];
       if (!dayLessons.length) continue;
 
       // Парсим и сортируем занятия дня по времени начала
       const parsedLessons = dayLessons
-        .map((l) => ({ lesson: l, times: parseTimes(l.time) }))
+        .map((l: Lesson) => ({ lesson: l, times: parseTimes(l.time || '') }))
         .filter((item): item is { lesson: Lesson; times: LessonTimeParsed } => item.times !== null)
         .sort((a, b) => (a.times.startHour * 60 + a.times.startMin) - (b.times.startHour * 60 + b.times.startMin));
 
@@ -154,7 +156,7 @@ export const scheduleLessonNotifications = async (
 
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: `🔔 Следующее занятие: ${lesson.subject}`,
+            title: `Следующее занятие: ${lesson.subject}`,
             body: `${lesson.time} | Ауд. ${lesson.room || '—'} (${lesson.type})`,
             sound: true,
           },

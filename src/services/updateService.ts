@@ -1,3 +1,5 @@
+import Constants from 'expo-constants';
+
 export interface UpdateInfo {
   hasUpdate: boolean;
   latestVersion: string;
@@ -6,18 +8,22 @@ export interface UpdateInfo {
   releaseNotes: string;
   downloadUrl: string;
   publishedAt: string;
+  error?: string;
 }
 
-// Сравнение версий вида 1.0.2 > 1.0.1
+export const APP_VERSION = '2.0.0';
+
+export const getInstalledAppVersion = (): string => {
+  return APP_VERSION;
+};
+
 export const isNewerVersion = (latest: string, current: string): boolean => {
-  const cleanLatest = latest.replace(/^v/i, '').trim();
-  const cleanCurrent = current.replace(/^v/i, '').trim();
+  const sanitize = (ver: string) => ver.replace(/^v/i, '').trim();
+  const lParts = sanitize(latest).split('.').map((p) => parseInt(p, 10) || 0);
+  const cParts = sanitize(current).split('.').map((p) => parseInt(p, 10) || 0);
 
-  const lParts = cleanLatest.split('.').map((p) => parseInt(p, 10) || 0);
-  const cParts = cleanCurrent.split('.').map((p) => parseInt(p, 10) || 0);
-
-  const len = Math.max(lParts.length, cParts.length);
-  for (let i = 0; i < len; i++) {
+  const length = Math.max(lParts.length, cParts.length);
+  for (let i = 0; i < length; i++) {
     const l = lParts[i] || 0;
     const c = cParts[i] || 0;
     if (l > c) return true;
@@ -26,43 +32,59 @@ export const isNewerVersion = (latest: string, current: string): boolean => {
   return false;
 };
 
-// Проверка наличия релизов в GitHub
 export const checkGitHubUpdate = async (
-  currentVersion: string = '1.1.1',
-  repoSlug: string = 'aevoro/SNotes'
+  currentVersion: string = getInstalledAppVersion(),
+  repoSlug: string = 'aevoro/SNotes',
+  timeoutMs: number = 8000
 ): Promise<UpdateInfo> => {
+  const fallbackInfo: UpdateInfo = {
+    hasUpdate: false,
+    latestVersion: currentVersion,
+    currentVersion,
+    releaseName: '',
+    releaseNotes: '',
+    downloadUrl: '',
+    publishedAt: '',
+  };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const response = await fetch(`https://api.github.com/repos/${repoSlug}/releases/latest`, {
       headers: {
         Accept: 'application/vnd.github.v3+json',
         'User-Agent': 'SNotes-App',
       },
+      signal: controller.signal,
     });
 
+    clearTimeout(timer);
+
+    if (response.status === 404) {
+      return { ...fallbackInfo, error: 'Релизы в репозитории не найдены' };
+    }
+
+    if (response.status === 403) {
+      return { ...fallbackInfo, error: 'Превышен лимит запросов к GitHub API' };
+    }
+
     if (!response.ok) {
-      return {
-        hasUpdate: false,
-        latestVersion: currentVersion,
-        currentVersion,
-        releaseName: '',
-        releaseNotes: '',
-        downloadUrl: '',
-        publishedAt: '',
-      };
+      return { ...fallbackInfo, error: `Ошибка GitHub API: ${response.status}` };
     }
 
     const data = await response.json();
     const latestTag = data.tag_name || '';
-    const cleanLatest = latestTag.replace(/^v/i, '');
+    const cleanLatest = latestTag.replace(/^v/i, '').trim();
     const hasUpdate = isNewerVersion(cleanLatest, currentVersion);
 
-    // Ищем APK файл в прикрепленных ассетах релиза
-    let apkUrl = data.html_url;
+    let apkUrl = data.html_url || '';
     if (Array.isArray(data.assets) && data.assets.length > 0) {
-      const apkAsset = data.assets.find((asset: any) =>
-        asset.name && asset.name.toLowerCase().endsWith('.apk')
+      const apkAsset = data.assets.find(
+        (asset: { name?: string; browser_download_url?: string }) =>
+          typeof asset.name === 'string' && asset.name.toLowerCase().endsWith('.apk')
       );
-      if (apkAsset && apkAsset.browser_download_url) {
+      if (apkAsset?.browser_download_url) {
         apkUrl = apkAsset.browser_download_url;
       }
     }
@@ -74,18 +96,20 @@ export const checkGitHubUpdate = async (
       releaseName: data.name || latestTag,
       releaseNotes: data.body || '',
       downloadUrl: apkUrl,
-      publishedAt: data.published_at ? new Date(data.published_at).toLocaleDateString('ru-RU') : '',
+      publishedAt: data.published_at
+        ? new Date(data.published_at).toLocaleDateString('ru-RU', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          })
+        : '',
     };
-  } catch (error) {
-    console.error('Ошибка проверки обновлений GitHub:', error);
+  } catch (error: any) {
+    clearTimeout(timer);
+    const isAbort = error?.name === 'AbortError';
     return {
-      hasUpdate: false,
-      latestVersion: currentVersion,
-      currentVersion,
-      releaseName: '',
-      releaseNotes: '',
-      downloadUrl: '',
-      publishedAt: '',
+      ...fallbackInfo,
+      error: isAbort ? 'Превышено время ожидания ответа GitHub' : 'Нет подключения к сети',
     };
   }
 };

@@ -1,21 +1,37 @@
-export type LessonType = 'Лекция' | 'Практика' | 'Лабораторная';
+export type StandardEventType =
+  | 'Учеба'
+  | 'Лекция'
+  | 'Практика'
+  | 'Лабораторная'
+  | 'Встреча'
+  | 'Тренировка'
+  | 'Работа'
+  | 'Личное';
+
+export type LessonType = StandardEventType | string;
 export type WeekType = 1 | 2 | 'both';
+export type RecurrenceType = 'weekly' | 'week1' | 'week2' | 'once';
 
 export interface Lesson {
   id: string;
   subject: string;
   room?: string;
   teacher?: string;
-  dayOfWeek: number;
-  weekType: WeekType;
+  dayOfWeek?: number;
+  weekType?: WeekType;
+  recurrence?: RecurrenceType;
+  date?: string; // YYYY-MM-DD for single-day calendar events
   type: LessonType;
-  startTime: string;
-  endTime: string;
+  startTime?: string;
+  endTime?: string;
   time?: string;
+  color?: string;
+  notes?: string;
 }
 
 export interface LessonStyleConfig {
-  label: LessonType;
+  label: string;
+  color: string;
   bgDark: string;
   bgLight: string;
   textDark: string;
@@ -27,24 +43,30 @@ export interface LessonStyleConfig {
 
 export const hexToRgba = (hex: string, alpha: number): string => {
   const cleanHex = hex.replace('#', '');
-  if (cleanHex.length !== 6) return `rgba(2, 132, 199, ${alpha})`;
+  if (cleanHex.length !== 6) return `rgba(10, 132, 255, ${alpha})`;
   const r = parseInt(cleanHex.substring(0, 2), 16);
   const g = parseInt(cleanHex.substring(2, 4), 16);
   const b = parseInt(cleanHex.substring(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-export const getLessonStyleConfig = (type: LessonType, customColor?: string): LessonStyleConfig => {
-  const defaultColors: Record<LessonType, string> = {
-    'Лекция': '#0284c7',
-    'Практика': '#d97706',
-    'Лабораторная': '#c026d3',
-  };
+export const DEFAULT_EVENT_COLORS: Record<string, string> = {
+  Учеба: '#0a84ff', // Cupertino Blue
+  Лекция: '#0284c7', // Sky Blue
+  Практика: '#d97706', // Amber
+  Лабораторная: '#c026d3', // Fuchsia
+  Встреча: '#10b981', // Emerald
+  Тренировка: '#f97316', // Orange
+  Работа: '#6366f1', // Indigo
+  Личное: '#ec4899', // Pink
+};
 
-  const baseHex = customColor || defaultColors[type] || '#0284c7';
+export const getLessonStyleConfig = (type: string, customColor?: string): LessonStyleConfig => {
+  const baseHex = customColor || DEFAULT_EVENT_COLORS[type] || '#0a84ff';
 
   return {
     label: type,
+    color: baseHex,
     bgDark: hexToRgba(baseHex, 0.16),
     bgLight: hexToRgba(baseHex, 0.12),
     textDark: baseHex,
@@ -53,10 +75,4 @@ export const getLessonStyleConfig = (type: LessonType, customColor?: string): Le
     badgeBgDark: hexToRgba(baseHex, 0.28),
     badgeBgLight: hexToRgba(baseHex, 0.2),
   };
-};
-
-export const LESSON_COLORS: Record<LessonType, LessonStyleConfig> = {
-  'Лекция': getLessonStyleConfig('Лекция', '#0284c7'),
-  'Практика': getLessonStyleConfig('Практика', '#d97706'),
-  'Лабораторная': getLessonStyleConfig('Лабораторная', '#c026d3'),
 };

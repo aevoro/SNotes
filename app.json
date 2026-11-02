@@ -2,22 +2,22 @@
   "expo": {
     "name": "SNotes",
     "slug": "snotes",
-    "version": "1.1.1",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/snotes_icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/snotes_icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0f0f11"
+      "backgroundColor": "#000000"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/snotes_icon.png",
-        "backgroundColor": "#0f0f11"
+        "backgroundColor": "#000000"
       },
       "package": "com.snotes.app",
-      "versionCode": 3
+      "versionCode": 5
     },
     "web": {
       "favicon": "./assets/images/snotes_icon.png"

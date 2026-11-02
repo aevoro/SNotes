@@ -21,7 +21,7 @@ export const calculateEndTime = (startTime: string, durationMinutes: number): st
 };
 
 export const sortLessonsByTime = (lessons: Lesson[]): Lesson[] => {
-  return [...lessons].sort((a, b) => a.startTime.localeCompare(b.startTime));
+  return [...lessons].sort((a, b) => (a.startTime || a.time || '').localeCompare(b.startTime || b.time || ''));
 };
 
 export const getLessonsForDay = (

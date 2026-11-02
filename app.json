@@ -2,7 +2,7 @@
   "expo": {
     "name": "SNotes",
     "slug": "snotes",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/snotes_icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.snotes.app",
-      "versionCode": 5
+      "versionCode": 6
     },
     "web": {
       "favicon": "./assets/images/snotes_icon.png"

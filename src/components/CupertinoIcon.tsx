@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
+import { isLoaded } from 'expo-font';
 
 export type CupertinoIconName =
   | 'settings'
@@ -98,7 +99,9 @@ export const CupertinoIcon: React.FC<CupertinoIconProps> = ({
   color = '#007aff',
   style,
 }) => {
-  if (VectorIonicons) {
+  const canUseVector = VectorIonicons && (Platform.OS === 'web' || isLoaded('Ionicons'));
+
+  if (canUseVector) {
     const ionName = IONICONS_MAP[name] || 'ellipse-outline';
     return (
       <View style={style} accessibilityElementsHidden aria-hidden={true}>
@@ -428,6 +431,37 @@ const FallbackVectorIcon: React.FC<CupertinoIconProps> = ({ name, size = 20, col
       );
 
     case 'pencil':
+    case 'edit':
+      return (
+        <View style={[{ width: s, height: s, alignItems: 'center', justifyContent: 'center' }, style]}>
+          <View
+            style={{
+              width: s * 0.55,
+              height: stroke * 1.5,
+              backgroundColor: color,
+              transform: [{ rotate: '-45deg' }],
+              borderRadius: 1,
+            }}
+          />
+        </View>
+      );
+
+    case 'layers':
+      return (
+        <View style={[{ width: s, height: s, alignItems: 'center', justifyContent: 'center' }, style]}>
+          <View
+            style={{
+              width: s * 0.55,
+              height: s * 0.55,
+              borderWidth: stroke,
+              borderColor: color,
+              borderRadius: 2,
+              transform: [{ rotate: '45deg' }],
+            }}
+          />
+        </View>
+      );
+
     case 'time':
     case 'clock':
     case 'bell':

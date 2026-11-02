@@ -28,6 +28,10 @@ const MONTHS_UPPER = [
   'ЯНВАРЬ', 'ФЕВРАЛЬ', 'МАРТ', 'АПРЕЛЬ', 'МАЙ', 'ИЮНЬ',
   'ИЮЛЬ', 'АВГУСТ', 'СЕНТЯБРЬ', 'ОКТЯБРЬ', 'НОЯБРЬ', 'ДЕКАБРЬ',
 ];
+const MONTHS_GENITIVE = [
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+];
 
 const formatDateKey = (year: number, month: number, day: number): string => {
   const m = (month + 1).toString().padStart(2, '0');
@@ -189,6 +193,20 @@ export default function CalendarScreen() {
     });
   };
 
+  // Notes in Calendar folder created on this day
+  const getCalendarNotesForDay = (day: number) => {
+    return notes.filter((n) => {
+      if (n.folderId !== SYSTEM_CALENDAR_FOLDER_ID) return false;
+      if (n.id.startsWith('ev-')) return false;
+      const nDate = new Date(n.createdAt);
+      return (
+        nDate.getFullYear() === calYear &&
+        nDate.getMonth() === calMonth &&
+        nDate.getDate() === day
+      );
+    });
+  };
+
   const handleSelectDay = (day: number) => {
     setSelectedDay(day);
     setIsDayModalOpen(true);
@@ -207,16 +225,7 @@ export default function CalendarScreen() {
   }, [calYear, calMonth, selectedDay, todos]);
 
   const selectedDayNotes = useMemo(() => {
-    return notes.filter((n) => {
-      if (n.folderId !== SYSTEM_CALENDAR_FOLDER_ID) return false;
-      if (n.id.startsWith('ev-')) return false;
-      const nDate = new Date(n.createdAt);
-      return (
-        nDate.getFullYear() === calYear &&
-        nDate.getMonth() === calMonth &&
-        nDate.getDate() === selectedDay
-      );
-    });
+    return getCalendarNotesForDay(selectedDay);
   }, [calYear, calMonth, selectedDay, notes]);
 
   const handleDeleteTodo = async (todoId: string) => {
@@ -376,7 +385,9 @@ export default function CalendarScreen() {
                     calMonth === now.getMonth() &&
                     calYear === now.getFullYear();
 
-                  const hasCalendarEvent = getCalendarEventsForDay(day).length > 0;
+                  const hasCalendarEvent =
+                    getCalendarEventsForDay(day).length > 0 ||
+                    getCalendarNotesForDay(day).length > 0;
                   const hasDeadline = getTodosForDay(day).length > 0;
 
                   return (
@@ -386,7 +397,7 @@ export default function CalendarScreen() {
                         activeOpacity={0.7}
                         style={styles.cellTouchable}
                         accessibilityRole="button"
-                        accessibilityLabel={`${day} ${MONTHS_UPPER[calMonth]}`}>
+                        accessibilityLabel={`${day} ${MONTHS_GENITIVE[calMonth]}`}>
                         <View
                           style={[
                             styles.dayCircle,
@@ -410,7 +421,7 @@ export default function CalendarScreen() {
                             <View
                               style={[
                                 styles.dot,
-                                { backgroundColor: eventMarkerColor },
+                                { backgroundColor: isSelected ? '#ffffff' : eventMarkerColor },
                               ]}
                             />
                           )}
@@ -418,7 +429,7 @@ export default function CalendarScreen() {
                             <View
                               style={[
                                 styles.dot,
-                                { backgroundColor: deadlineMarkerColor },
+                                { backgroundColor: isSelected ? '#ffffff' : deadlineMarkerColor },
                               ]}
                             />
                           )}
@@ -449,7 +460,7 @@ export default function CalendarScreen() {
               style={[styles.openModalBtn, { backgroundColor: theme.pillBg, borderColor: theme.border }]}
               accessibilityRole="button">
               <Text style={[styles.openModalBtnText, { color: theme.accent }]}>
-                {selectedDay} {MONTHS_UPPER[calMonth].toLowerCase()} • Открыть день
+                {selectedDay} {MONTHS_GENITIVE[calMonth]} • Открыть день
               </Text>
             </TouchableOpacity>
           </View>
@@ -469,7 +480,7 @@ export default function CalendarScreen() {
             <View style={styles.modalHeaderRow}>
               <View>
                 <Text style={[styles.modalDateTitle, { color: theme.textPrimary }]}>
-                  {selectedDay} {MONTHS_UPPER[calMonth].toLowerCase()} {calYear}
+                  {selectedDay} {MONTHS_GENITIVE[calMonth]} {calYear}
                 </Text>
                 <Text style={[styles.modalDaySub, { color: theme.textSecondary }]}>
                   {DAYS_FULL[selectedDateObj.getDay()]}
@@ -484,7 +495,11 @@ export default function CalendarScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 340 }} contentContainerStyle={{ paddingVertical: 8 }}>
+            <ScrollView
+              style={{ maxHeight: 360, flexGrow: 0 }}
+              contentContainerStyle={{ paddingVertical: 4, flexGrow: 0 }}
+              showsVerticalScrollIndicator={true}
+              bounces={false}>
               {/* Tasks Section (Deadlines) */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                 <View style={[styles.legendDot, { backgroundColor: deadlineMarkerColor }]} />
@@ -834,9 +849,10 @@ const styles = StyleSheet.create({
   },
   tableCell: {
     flex: 1,
-    height: 52,
+    height: 56,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 3,
   },
   weekdayColText: {
     textAlign: 'center',
@@ -850,20 +866,23 @@ const styles = StyleSheet.create({
   },
   cellTouchable: {
     width: '100%',
-    height: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   dayCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    alignSelf: 'center',
     justifyContent: 'center',
     alignItems: 'center',
   },
   dayText: {
-    fontSize: 16.5,
+    fontSize: 15,
     fontWeight: '600',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   dotsRow: {
     height: 6,
@@ -871,7 +890,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
+    marginTop: 3,
   },
   dot: {
     width: 5,
@@ -974,10 +993,15 @@ const styles = StyleSheet.create({
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 6,
+    marginBottom: 8,
+    alignSelf: 'stretch',
+    flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 46,
   },
   deleteRowBtn: {
     padding: 6,

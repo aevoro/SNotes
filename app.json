@@ -21,6 +21,16 @@
     },
     "web": {
       "favicon": "./assets/images/snotes_icon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf"
+          ]
+        }
+      ]
+    ]
   }
 }

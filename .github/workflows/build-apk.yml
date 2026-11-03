@@ -32,11 +32,6 @@ jobs:
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --no-install --clean --non-interactive
 
-      - name: Ensure vector fonts in Android assets
-        run: |
-          mkdir -p android/app/src/main/assets/fonts
-          cp -f node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf android/app/src/main/assets/fonts/Ionicons.ttf
-
       - name: Configure Gradle Memory
         run: |
           mkdir -p ~/.gradle

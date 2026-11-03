@@ -497,7 +497,7 @@ export default function CalendarScreen() {
 
             <ScrollView
               style={{ maxHeight: 360, flexGrow: 0 }}
-              contentContainerStyle={{ paddingVertical: 4, flexGrow: 0 }}
+              contentContainerStyle={{ paddingVertical: 4, flexGrow: 0, justifyContent: 'flex-start' }}
               showsVerticalScrollIndicator={true}
               bounces={false}>
               {/* Tasks Section (Deadlines) */}
@@ -569,11 +569,11 @@ export default function CalendarScreen() {
                     key={ev.id}
                     style={[styles.itemRow, { backgroundColor: theme.surfaceSolid, borderColor: theme.border }]}>
                     <CupertinoIcon name="calendar" size={15} color={eventMarkerColor} style={{ marginRight: 8 }} />
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, justifyContent: 'center' }}>
                       <Text style={[styles.itemTitle, { color: theme.textPrimary }]} numberOfLines={1}>
                         {ev.subject}
                       </Text>
-                      <Text style={[styles.itemSub, { color: theme.textSecondary }]}>
+                      <Text style={[styles.itemSub, { color: theme.textSecondary }]} numberOfLines={1}>
                         {ev.time} {ev.room && ev.room !== '—' ? `• ${ev.room}` : ''}
                       </Text>
                     </View>
@@ -604,7 +604,7 @@ export default function CalendarScreen() {
                       key={note.id}
                       style={[styles.itemRow, { backgroundColor: theme.surfaceSolid, borderColor: theme.border }]}>
                       <CupertinoIcon name="document" size={14} color={theme.accent} style={{ marginRight: 8 }} />
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, justifyContent: 'center' }}>
                         <Text style={[styles.itemTitle, { color: theme.textPrimary }]} numberOfLines={1}>
                           {note.title}
                         </Text>
@@ -639,7 +639,7 @@ export default function CalendarScreen() {
                       key={ev.id}
                       style={[styles.itemRow, { backgroundColor: theme.surfaceSolid, borderColor: theme.border }]}>
                       <CupertinoIcon name="clock" size={14} color={theme.textMuted} style={{ marginRight: 8 }} />
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, justifyContent: 'center' }}>
                         <Text style={[styles.itemTitle, { color: theme.textPrimary }]} numberOfLines={1}>
                           {ev.subject}
                         </Text>
@@ -994,14 +994,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    height: 52,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: 8,
     alignSelf: 'stretch',
-    flexGrow: 0,
-    flexShrink: 0,
-    minHeight: 46,
+    overflow: 'hidden',
   },
   deleteRowBtn: {
     padding: 6,
@@ -1021,10 +1019,12 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 13.5,
     fontWeight: '600',
+    lineHeight: 18,
   },
   itemSub: {
     fontSize: 11,
     marginTop: 2,
+    lineHeight: 14,
   },
 
   addTriggerBtn: {

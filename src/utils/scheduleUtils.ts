@@ -84,8 +84,17 @@ export const getCurrentWeekNumber = (date: Date = new Date()): 1 | 2 => {
 };
 
 // Проверка, идет ли занятие прямо сейчас
-export const isLessonCurrentlyActive = (timeString: string): boolean => {
+export const isLessonCurrentlyActive = (timeString: string, targetDate?: Date): boolean => {
   if (!timeString) return false;
+
+  const now = new Date();
+  if (targetDate) {
+    const isSameDate =
+      targetDate.getFullYear() === now.getFullYear() &&
+      targetDate.getMonth() === now.getMonth() &&
+      targetDate.getDate() === now.getDate();
+    if (!isSameDate) return false;
+  }
 
   const matches = timeString.match(/(\d{1,2}:\d{2})\s*[-—–]\s*(\d{1,2}:\d{2})/);
   if (!matches || matches.length < 3) return false;
@@ -96,7 +105,6 @@ export const isLessonCurrentlyActive = (timeString: string): boolean => {
 
   if (isNaN(sH) || isNaN(sM) || isNaN(eH) || isNaN(eM)) return false;
 
-  const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const startMinutes = sH * 60 + sM;
   const endMinutes = eH * 60 + eM;

@@ -476,7 +476,7 @@ export default function ScheduleScreen() {
           </View>
         ) : (
           currentDayEvents.map((lesson) => {
-            const isActive = isLessonCurrentlyActive(lesson.time || '');
+            const isActive = isLessonCurrentlyActive(lesson.time || '', selectedDate);
             const catColor = config.customLessonColors?.[lesson.type] || DEFAULT_EVENT_COLORS[lesson.type] || '#0a84ff';
             const styleConfig = getLessonStyleConfig(lesson.type, catColor);
 

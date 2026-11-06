@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useConfig } from '../../context/ConfigContext';
+import { useFolders } from '../../context/FoldersContext';
 import {
   InitialScreenType,
   LessonTimeSlot,
@@ -24,14 +25,40 @@ import { checkGitHubUpdate, getInstalledAppVersion, UpdateInfo } from '../../src
 import { requestNotificationPermissions } from '../../src/services/notificationService';
 import { CupertinoIcon, CupertinoIconName } from '../../src/components/CupertinoIcon';
 
-type SettingsCategory = 'appearance' | 'schedule' | 'notifications' | 'about' | null;
-
 export default function SettingsScreen() {
   const { theme, setMode, isScheduleEditable, toggleScheduleEditable } = useAppTheme();
   const { config, updateConfig, updateInitialScreen } = useConfig();
+  const { folders, deleteFolder } = useFolders();
   const currentAppVersion = getInstalledAppVersion();
 
-  const [activeCategory, setActiveCategory] = useState<SettingsCategory>(null);
+  // Accordion state: multiple sections can be open simultaneously
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set(['appearance'])
+  );
+
+  const toggleSection = (id: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Color picker sub-items expansion state (only one open at a time to stay clean)
+  const [expandedColorCat, setExpandedColorCat] = useState<string | null>(null);
+  const [expandedMarkerColor, setExpandedMarkerColor] = useState<'event' | 'deadline' | null>(null);
+
+  const toggleColorCat = (catName: string) => {
+    setExpandedColorCat((prev) => (prev === catName ? null : catName));
+  };
+
+  const toggleMarkerColor = (type: 'event' | 'deadline') => {
+    setExpandedMarkerColor((prev) => (prev === type ? null : type));
+  };
 
   // Time slot editing
   const [editingSlots, setEditingSlots] = useState<LessonTimeSlot[]>(config.timeSlots || []);
@@ -147,6 +174,20 @@ export default function SettingsScreen() {
     setIsAddCategoryOpen(false);
   };
 
+  const handleDeleteCategory = async (catToDelete: string) => {
+    const currentList = config.eventCategories || STANDARD_CATEGORIES;
+    if (currentList.length <= 1) return;
+    const nextList = currentList.filter((c) => c !== catToDelete);
+    await updateConfig({ eventCategories: nextList });
+    if (expandedColorCat === catToDelete) {
+      setExpandedColorCat(null);
+    }
+  };
+
+  const handleDeleteFolder = async (folderId: string) => {
+    await deleteFolder(folderId);
+  };
+
   const handleToggleNotifications = async () => {
     const nextVal = !config.notificationsEnabled;
     if (nextVal) {
@@ -175,88 +216,45 @@ export default function SettingsScreen() {
     }
   };
 
-  const categories = [
-    {
-      id: 'appearance' as SettingsCategory,
-      title: 'Внешний вид',
-      subtitle: theme.mode === 'dark' ? 'Тёмная' : 'Светлая',
-      icon: 'palette' as CupertinoIconName,
-    },
-    {
-      id: 'schedule' as SettingsCategory,
-      title: 'Расписание и события',
-      subtitle: `Слотов: ${editingSlots.length} • Категорий: ${(config.eventCategories || STANDARD_CATEGORIES).length}`,
-      icon: 'calendar' as CupertinoIconName,
-    },
-    {
-      id: 'notifications' as SettingsCategory,
-      title: 'Уведомления',
-      subtitle: config.notificationsEnabled ? 'Включены' : 'Отключены',
-      icon: 'bell' as CupertinoIconName,
-    },
-    {
-      id: 'about' as SettingsCategory,
-      title: 'О приложении',
-      subtitle: `Версия v${currentAppVersion}`,
-      icon: 'info' as CupertinoIconName,
-    },
-  ];
-
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      {activeCategory === null ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <Text style={[styles.pageTitle, { color: theme.textPrimary }]}>Настройки</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={[styles.pageTitle, { color: theme.textPrimary }]}>Настройки</Text>
 
-          <View style={styles.categoryCardsList}>
-            {categories.map((cat) => (
-              <TouchableOpacity
-                key={cat.id}
-                activeOpacity={0.7}
-                onPress={() => setActiveCategory(cat.id)}
-                style={[
-                  styles.categoryCard,
-                  { backgroundColor: theme.cardSolid, borderColor: theme.border },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={cat.title}>
-                <View style={[styles.categoryIconCircle, { backgroundColor: theme.pillBg }]}>
-                  <CupertinoIcon name={cat.icon} size={20} color={theme.accent} />
-                </View>
-
-                <View style={styles.categoryCardInfo}>
-                  <Text style={[styles.categoryCardTitle, { color: theme.textPrimary }]}>
-                    {cat.title}
-                  </Text>
-                  <Text style={[styles.categoryCardDesc, { color: theme.textSecondary }]}>
-                    {cat.subtitle}
-                  </Text>
-                </View>
-
-                <CupertinoIcon name="chevron" size={16} color={theme.textMuted} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-      ) : (
-        <View style={{ flex: 1 }}>
-          <View style={[styles.detailHeader, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+        <View style={styles.accordionList}>
+          {/* 1. ВНЕШНИЙ ВИД */}
+          <View style={styles.accordionSection}>
             <TouchableOpacity
-              onPress={() => setActiveCategory(null)}
-              style={styles.backButton}
-              accessibilityRole="button">
-              <Text style={{ color: theme.accent, fontSize: 14, fontWeight: '700' }}>← Категории</Text>
-            </TouchableOpacity>
-            <Text style={[styles.detailHeaderTitle, { color: theme.textPrimary }]}>
-              {categories.find((c) => c.id === activeCategory)?.title}
-            </Text>
-            <View style={{ width: 60 }} />
-          </View>
+              activeOpacity={0.7}
+              onPress={() => toggleSection('appearance')}
+              style={[
+                styles.categoryCard,
+                { backgroundColor: theme.cardSolid, borderColor: theme.border },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Внешний вид">
+              <View style={[styles.categoryIconCircle, { backgroundColor: theme.pillBg }]}>
+                <CupertinoIcon name="palette" size={20} color={theme.accent} />
+              </View>
 
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={true}>
-            {/* 1. ВНЕШНИЙ ВИД */}
-            {activeCategory === 'appearance' && (
-              <View>
+              <View style={styles.categoryCardInfo}>
+                <Text style={[styles.categoryCardTitle, { color: theme.textPrimary }]}>
+                  Внешний вид
+                </Text>
+                <Text style={[styles.categoryCardDesc, { color: theme.textSecondary }]}>
+                  {theme.mode === 'dark' ? 'Тёмная тема' : 'Светлая тема'} • Экран: {config.initialScreen}
+                </Text>
+              </View>
+
+              <CupertinoIcon
+                name={expandedSections.has('appearance') ? 'chevron-down' : 'chevron-right'}
+                size={18}
+                color={theme.textMuted}
+              />
+            </TouchableOpacity>
+
+            {expandedSections.has('appearance') && (
+              <View style={[styles.sectionBody, { backgroundColor: theme.cardSolid, borderColor: theme.border }]}>
                 <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>Тема оформления</Text>
                 <View style={styles.themeOptionsRow}>
                   <TouchableOpacity
@@ -322,11 +320,42 @@ export default function SettingsScreen() {
                 </View>
               </View>
             )}
+          </View>
 
-            {/* 2. РАСПИСАНИЕ И СОБЫТИЯ */}
-            {activeCategory === 'schedule' && (
-              <View>
-                {/* Clean Apple switch row without repetitive subtitles */}
+          {/* 2. РАСПИСАНИЕ И СОБЫТИЯ */}
+          <View style={styles.accordionSection}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => toggleSection('schedule')}
+              style={[
+                styles.categoryCard,
+                { backgroundColor: theme.cardSolid, borderColor: theme.border },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Расписание и события">
+              <View style={[styles.categoryIconCircle, { backgroundColor: theme.pillBg }]}>
+                <CupertinoIcon name="calendar" size={20} color={theme.accent} />
+              </View>
+
+              <View style={styles.categoryCardInfo}>
+                <Text style={[styles.categoryCardTitle, { color: theme.textPrimary }]}>
+                  Расписание и события
+                </Text>
+                <Text style={[styles.categoryCardDesc, { color: theme.textSecondary }]}>
+                  Слотов: {editingSlots.length} • Типов: {(config.eventCategories || STANDARD_CATEGORIES).length}
+                </Text>
+              </View>
+
+              <CupertinoIcon
+                name={expandedSections.has('schedule') ? 'chevron-down' : 'chevron-right'}
+                size={18}
+                color={theme.textMuted}
+              />
+            </TouchableOpacity>
+
+            {expandedSections.has('schedule') && (
+              <View style={[styles.sectionBody, { backgroundColor: theme.cardSolid, borderColor: theme.border }]}>
+                {/* Режим редактирования */}
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={toggleScheduleEditable}
@@ -351,8 +380,8 @@ export default function SettingsScreen() {
                   </View>
                 </TouchableOpacity>
 
-                {/* Duration */}
-                <Text style={[styles.sectionSubtitle, { color: theme.textSecondary, marginTop: 16 }]}>
+                {/* Длительность */}
+                <Text style={[styles.sectionSubtitle, { color: theme.textSecondary, marginTop: 14 }]}>
                   Длительность по умолчанию (минут)
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 12 }}>
@@ -374,8 +403,8 @@ export default function SettingsScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Slots */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8 }}>
+                {/* Сетка звонков */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 8 }}>
                   <Text style={[styles.sectionSubtitle, { color: theme.textSecondary, marginBottom: 0 }]}>
                     Сетка звонков ({editingSlots.length} из 8)
                   </Text>
@@ -387,7 +416,7 @@ export default function SettingsScreen() {
                 </View>
 
                 {editingSlots.length === 0 ? (
-                  <Text style={{ color: theme.textSecondary, fontSize: 13, marginBottom: 14 }}>
+                  <Text style={{ color: theme.textSecondary, fontSize: 13, marginBottom: 14, fontStyle: 'italic' }}>
                     Слотов нет. Нажмите «+ Добавить слот» выше
                   </Text>
                 ) : (
@@ -429,7 +458,7 @@ export default function SettingsScreen() {
                   })
                 )}
 
-                {/* Categories & Colors */}
+                {/* Категории событий и цвета (спрятаны в подпункты + возможность удаления) */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 8 }}>
                   <Text style={[styles.sectionSubtitle, { color: theme.textSecondary, marginBottom: 0 }]}>
                     Категории событий и цвета
@@ -441,119 +470,325 @@ export default function SettingsScreen() {
 
                 {(config.eventCategories || STANDARD_CATEGORIES).map((catName) => {
                   const current = config.customLessonColors?.[catName] || DEFAULT_LESSON_COLORS[catName] || '#0a84ff';
+                  const isExpanded = expandedColorCat === catName;
+                  const categoriesList = config.eventCategories || STANDARD_CATEGORIES;
+                  const canDelete = categoriesList.length > 1;
+
                   return (
-                    <View key={catName} style={styles.colorConfigBlock}>
-                      <View style={styles.colorConfigHeader}>
-                        <Text style={[styles.colorTypeTitle, { color: theme.textPrimary }]}>{catName}</Text>
-                        <View style={[styles.currentColorBadge, { backgroundColor: current }]}>
-                          <Text style={styles.currentColorHex}>{current}</Text>
+                    <View
+                      key={catName}
+                      style={[
+                        styles.subItemCard,
+                        { backgroundColor: theme.surfaceSolid, borderColor: theme.border },
+                      ]}>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => toggleColorCat(catName)}
+                        style={styles.subItemHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                          <View style={[styles.colorCircleInner, { backgroundColor: current }]} />
+                          <Text style={[styles.subItemTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+                            {catName}
+                          </Text>
                         </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={[styles.currentColorBadge, { backgroundColor: current }]}>
+                            <Text style={styles.currentColorHex}>{current}</Text>
+                          </View>
+                          <CupertinoIcon
+                            name={isExpanded ? 'chevron-down' : 'chevron-right'}
+                            size={14}
+                            color={theme.textMuted}
+                          />
+                          {canDelete && (
+                            <TouchableOpacity
+                              onPress={() => handleDeleteCategory(catName)}
+                              hitSlop={8}
+                              style={{ padding: 4, marginLeft: 2 }}>
+                              <CupertinoIcon name="trash" size={15} color={theme.danger} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Скрытый выбор цвета в подпункте */}
+                      {isExpanded && (
+                        <View style={[styles.colorPickerSubItem, { borderTopColor: theme.border }]}>
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.paletteScrollContent}
+                            style={styles.paletteScroll}>
+                            {COLOR_PALETTE.map((c) => {
+                              const isChosen = current.toLowerCase() === c.toLowerCase();
+                              return (
+                                <TouchableOpacity
+                                  key={c}
+                                  activeOpacity={0.7}
+                                  onPress={() => handleSelectColor(catName, c)}
+                                  style={[
+                                    styles.colorCircleWrapper,
+                                    isChosen && { borderColor: theme.mode === 'dark' ? '#ffffff' : theme.textPrimary },
+                                  ]}>
+                                  <View style={[styles.colorCircleInner, { backgroundColor: c }]} />
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+
+                {/* Индикаторы в календаре (спрятаны в подпункты) */}
+                <Text style={[styles.sectionSubtitle, { color: theme.textSecondary, marginTop: 18, marginBottom: 8 }]}>
+                  Индикаторы в календаре
+                </Text>
+
+                {/* Маркер событий */}
+                <View style={[styles.subItemCard, { backgroundColor: theme.surfaceSolid, borderColor: theme.border }]}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => toggleMarkerColor('event')}
+                    style={styles.subItemHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <View
+                        style={[
+                          styles.colorCircleInner,
+                          { backgroundColor: config.calendarEventMarkerColor || '#0a84ff' },
+                        ]}
+                      />
+                      <Text style={[styles.subItemTitle, { color: theme.textPrimary }]}>
+                        Маркер событий
+                      </Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View
+                        style={[
+                          styles.currentColorBadge,
+                          { backgroundColor: config.calendarEventMarkerColor || '#0a84ff' },
+                        ]}>
+                        <Text style={styles.currentColorHex}>
+                          {config.calendarEventMarkerColor || '#0a84ff'}
+                        </Text>
                       </View>
+                      <CupertinoIcon
+                        name={expandedMarkerColor === 'event' ? 'chevron-down' : 'chevron-right'}
+                        size={14}
+                        color={theme.textMuted}
+                      />
+                    </View>
+                  </TouchableOpacity>
+
+                  {expandedMarkerColor === 'event' && (
+                    <View style={[styles.colorPickerSubItem, { borderTopColor: theme.border }]}>
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.paletteScrollContent}
-                        style={styles.paletteScroll}>
-                        {COLOR_PALETTE.map((c) => {
-                          const isChosen = current.toLowerCase() === c.toLowerCase();
+                        contentContainerStyle={styles.paletteScrollContent}>
+                        {COLOR_PALETTE.map((hex) => {
+                          const isSel = (config.calendarEventMarkerColor || '#0a84ff') === hex;
                           return (
                             <TouchableOpacity
-                              key={c}
-                              activeOpacity={0.7}
-                              onPress={() => handleSelectColor(catName, c)}
+                              key={`ev-${hex}`}
+                              onPress={() => updateConfig({ calendarEventMarkerColor: hex })}
                               style={[
                                 styles.colorCircleWrapper,
-                                isChosen && { borderColor: theme.mode === 'dark' ? '#ffffff' : theme.textPrimary },
+                                isSel && { borderColor: theme.mode === 'dark' ? '#ffffff' : theme.textPrimary },
                               ]}>
-                              <View style={[styles.colorCircleInner, { backgroundColor: c }]} />
+                              <View style={[styles.colorCircleInner, { backgroundColor: hex }]} />
                             </TouchableOpacity>
                           );
                         })}
                       </ScrollView>
                     </View>
-                  );
-                })}
-
-                {/* Индикаторы в календаре */}
-                <Text style={[styles.sectionSubtitle, { color: theme.textSecondary, marginTop: 22 }]}>
-                  Индикаторы в календаре
-                </Text>
-
-                {/* Event Marker Color */}
-                <View style={styles.colorConfigBlock}>
-                  <View style={styles.colorConfigHeader}>
-                    <Text style={[styles.colorTypeTitle, { color: theme.textPrimary }]}>
-                      Маркер событий
-                    </Text>
-                    <View
-                      style={[
-                        styles.currentColorBadge,
-                        { backgroundColor: config.calendarEventMarkerColor || '#0a84ff' },
-                      ]}>
-                      <Text style={styles.currentColorHex}>
-                        {config.calendarEventMarkerColor || '#0a84ff'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.paletteScrollContent}>
-                    {COLOR_PALETTE.map((hex) => {
-                      const isSel = (config.calendarEventMarkerColor || '#0a84ff') === hex;
-                      return (
-                        <TouchableOpacity
-                          key={`ev-${hex}`}
-                          onPress={() => updateConfig({ calendarEventMarkerColor: hex })}
-                          style={[
-                            styles.colorCircleWrapper,
-                            isSel && { borderColor: theme.mode === 'dark' ? '#ffffff' : theme.textPrimary },
-                          ]}>
-                          <View style={[styles.colorCircleInner, { backgroundColor: hex }]} />
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
+                  )}
                 </View>
 
-                {/* Deadline Marker Color */}
-                <View style={[styles.colorConfigBlock, { marginTop: 12 }]}>
-                  <View style={styles.colorConfigHeader}>
-                    <Text style={[styles.colorTypeTitle, { color: theme.textPrimary }]}>
-                      Маркер дедлайнов задач
-                    </Text>
-                    <View
-                      style={[
-                        styles.currentColorBadge,
-                        { backgroundColor: config.calendarDeadlineMarkerColor || '#ff453a' },
-                      ]}>
-                      <Text style={styles.currentColorHex}>
-                        {config.calendarDeadlineMarkerColor || '#ff453a'}
+                {/* Маркер дедлайнов задач */}
+                <View style={[styles.subItemCard, { backgroundColor: theme.surfaceSolid, borderColor: theme.border, marginTop: 6 }]}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => toggleMarkerColor('deadline')}
+                    style={styles.subItemHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <View
+                        style={[
+                          styles.colorCircleInner,
+                          { backgroundColor: config.calendarDeadlineMarkerColor || '#ff453a' },
+                        ]}
+                      />
+                      <Text style={[styles.subItemTitle, { color: theme.textPrimary }]}>
+                        Маркер дедлайнов задач
                       </Text>
                     </View>
-                  </View>
 
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.paletteScrollContent}>
-                    {COLOR_PALETTE.map((hex) => {
-                      const isSel = (config.calendarDeadlineMarkerColor || '#ff453a') === hex;
-                      return (
-                        <TouchableOpacity
-                          key={`dl-${hex}`}
-                          onPress={() => updateConfig({ calendarDeadlineMarkerColor: hex })}
-                          style={[
-                            styles.colorCircleWrapper,
-                            isSel && { borderColor: theme.mode === 'dark' ? '#ffffff' : theme.textPrimary },
-                          ]}>
-                          <View style={[styles.colorCircleInner, { backgroundColor: hex }]} />
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View
+                        style={[
+                          styles.currentColorBadge,
+                          { backgroundColor: config.calendarDeadlineMarkerColor || '#ff453a' },
+                        ]}>
+                        <Text style={styles.currentColorHex}>
+                          {config.calendarDeadlineMarkerColor || '#ff453a'}
+                        </Text>
+                      </View>
+                      <CupertinoIcon
+                        name={expandedMarkerColor === 'deadline' ? 'chevron-down' : 'chevron-right'}
+                        size={14}
+                        color={theme.textMuted}
+                      />
+                    </View>
+                  </TouchableOpacity>
+
+                  {expandedMarkerColor === 'deadline' && (
+                    <View style={[styles.colorPickerSubItem, { borderTopColor: theme.border }]}>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.paletteScrollContent}>
+                        {COLOR_PALETTE.map((hex) => {
+                          const isSel = (config.calendarDeadlineMarkerColor || '#ff453a') === hex;
+                          return (
+                            <TouchableOpacity
+                              key={`dl-${hex}`}
+                              onPress={() => updateConfig({ calendarDeadlineMarkerColor: hex })}
+                              style={[
+                                styles.colorCircleWrapper,
+                                isSel && { borderColor: theme.mode === 'dark' ? '#ffffff' : theme.textPrimary },
+                              ]}>
+                              <View style={[styles.colorCircleInner, { backgroundColor: hex }]} />
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  )}
                 </View>
               </View>
             )}
+          </View>
 
-            {/* 3. УВЕДОМЛЕНИЯ */}
-            {activeCategory === 'notifications' && (
-              <View>
+          {/* 3. ПАПКИ И КАТЕГОРИИ ЗАДАЧ (Удаление типов папок и задач) */}
+          <View style={styles.accordionSection}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => toggleSection('folders')}
+              style={[
+                styles.categoryCard,
+                { backgroundColor: theme.cardSolid, borderColor: theme.border },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Папки заметок и задач">
+              <View style={[styles.categoryIconCircle, { backgroundColor: theme.pillBg }]}>
+                <CupertinoIcon name="folder" size={20} color={theme.accent} />
+              </View>
+
+              <View style={styles.categoryCardInfo}>
+                <Text style={[styles.categoryCardTitle, { color: theme.textPrimary }]}>
+                  Папки заметок и задач
+                </Text>
+                <Text style={[styles.categoryCardDesc, { color: theme.textSecondary }]}>
+                  Всего папок: {folders.length} • Удаление и управление
+                </Text>
+              </View>
+
+              <CupertinoIcon
+                name={expandedSections.has('folders') ? 'chevron-down' : 'chevron-right'}
+                size={18}
+                color={theme.textMuted}
+              />
+            </TouchableOpacity>
+
+            {expandedSections.has('folders') && (
+              <View style={[styles.sectionBody, { backgroundColor: theme.cardSolid, borderColor: theme.border }]}>
+                <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>
+                  Список папок ({folders.length})
+                </Text>
+
+                {folders.length === 0 ? (
+                  <Text style={{ color: theme.textSecondary, fontSize: 13, fontStyle: 'italic', marginVertical: 8 }}>
+                    Папок пока нет
+                  </Text>
+                ) : (
+                  folders.map((folder) => {
+                    return (
+                      <View
+                        key={folder.id}
+                        style={[
+                          styles.subItemCard,
+                          { backgroundColor: theme.surfaceSolid, borderColor: theme.border },
+                        ]}>
+                        <View style={styles.subItemHeader}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                            <CupertinoIcon
+                              name={folder.icon || 'folder'}
+                              size={18}
+                              color={folder.color || theme.accent}
+                            />
+                            <Text style={[styles.subItemTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+                              {folder.name}
+                            </Text>
+                          </View>
+
+                          {folder.isSystem ? (
+                            <View style={[styles.systemBadge, { backgroundColor: theme.pillBg }]}>
+                              <Text style={[styles.systemBadgeText, { color: theme.accent }]}>Системная</Text>
+                            </View>
+                          ) : (
+                            <TouchableOpacity
+                              onPress={() => handleDeleteFolder(folder.id)}
+                              hitSlop={8}
+                              style={{ padding: 4 }}
+                              accessibilityLabel={`Удалить папку ${folder.name}`}>
+                              <CupertinoIcon name="trash" size={16} color={theme.danger} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            )}
+          </View>
+
+          {/* 4. УВЕДОМЛЕНИЯ */}
+          <View style={styles.accordionSection}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => toggleSection('notifications')}
+              style={[
+                styles.categoryCard,
+                { backgroundColor: theme.cardSolid, borderColor: theme.border },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Уведомления">
+              <View style={[styles.categoryIconCircle, { backgroundColor: theme.pillBg }]}>
+                <CupertinoIcon name="bell" size={20} color={theme.accent} />
+              </View>
+
+              <View style={styles.categoryCardInfo}>
+                <Text style={[styles.categoryCardTitle, { color: theme.textPrimary }]}>
+                  Уведомления
+                </Text>
+                <Text style={[styles.categoryCardDesc, { color: theme.textSecondary }]}>
+                  {config.notificationsEnabled ? 'Включены' : 'Отключены'}
+                </Text>
+              </View>
+
+              <CupertinoIcon
+                name={expandedSections.has('notifications') ? 'chevron-down' : 'chevron-right'}
+                size={18}
+                color={theme.textMuted}
+              />
+            </TouchableOpacity>
+
+            {expandedSections.has('notifications') && (
+              <View style={[styles.sectionBody, { backgroundColor: theme.cardSolid, borderColor: theme.border }]}>
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={handleToggleNotifications}
@@ -578,7 +813,7 @@ export default function SettingsScreen() {
                   </View>
                 </TouchableOpacity>
 
-                <Text style={[styles.sectionSubtitle, { color: theme.textSecondary, marginTop: 16 }]}>
+                <Text style={[styles.sectionSubtitle, { color: theme.textSecondary, marginTop: 14 }]}>
                   Время напоминания до начала
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -602,11 +837,41 @@ export default function SettingsScreen() {
                 </View>
               </View>
             )}
+          </View>
 
-            {/* 4. О ПРИЛОЖЕНИИ */}
-            {activeCategory === 'about' && (
-              <View>
-                {/* Clean version row without redundant 'Проверка релизов на GitHub' subtitle */}
+          {/* 5. О ПРИЛОЖЕНИИ */}
+          <View style={styles.accordionSection}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => toggleSection('about')}
+              style={[
+                styles.categoryCard,
+                { backgroundColor: theme.cardSolid, borderColor: theme.border },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="О приложении">
+              <View style={[styles.categoryIconCircle, { backgroundColor: theme.pillBg }]}>
+                <CupertinoIcon name="info" size={20} color={theme.accent} />
+              </View>
+
+              <View style={styles.categoryCardInfo}>
+                <Text style={[styles.categoryCardTitle, { color: theme.textPrimary }]}>
+                  О приложении
+                </Text>
+                <Text style={[styles.categoryCardDesc, { color: theme.textSecondary }]}>
+                  Версия v{currentAppVersion}
+                </Text>
+              </View>
+
+              <CupertinoIcon
+                name={expandedSections.has('about') ? 'chevron-down' : 'chevron-right'}
+                size={18}
+                color={theme.textMuted}
+              />
+            </TouchableOpacity>
+
+            {expandedSections.has('about') && (
+              <View style={[styles.sectionBody, { backgroundColor: theme.cardSolid, borderColor: theme.border }]}>
                 <View
                   style={[
                     styles.cleanSettingRow,
@@ -634,14 +899,13 @@ export default function SettingsScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Show status text ONLY if user initiated a check and there is actual feedback */}
                 {updateStatusMsg ? (
                   <Text style={[styles.statusFeedbackText, { color: theme.accent }]}>
                     {updateStatusMsg}
                   </Text>
                 ) : null}
 
-                <View style={[styles.aboutCard, { backgroundColor: theme.surfaceSolid, borderColor: theme.border, marginTop: 14 }]}>
+                <View style={[styles.aboutCard, { backgroundColor: theme.surfaceSolid, borderColor: theme.border, marginTop: 12 }]}>
                   <Text style={[styles.aboutTitle, { color: theme.textPrimary }]}>SNotes v{currentAppVersion}</Text>
                   <Text style={[styles.aboutText, { color: theme.textSecondary }]}>
                     Универсальный инструмент для заметок, структурированных задач и гибкого расписания событий в стилистике Cupertino Glass.
@@ -656,9 +920,9 @@ export default function SettingsScreen() {
                 </View>
               </View>
             )}
-          </ScrollView>
+          </View>
         </View>
-      )}
+      </ScrollView>
 
       {/* Modal to add custom event category */}
       <Modal visible={isAddCategoryOpen} transparent animationType="fade" onRequestClose={() => setIsAddCategoryOpen(false)}>
@@ -758,7 +1022,10 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { padding: 18, paddingBottom: 120 },
   pageTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.4, marginBottom: 16 },
-  categoryCardsList: { gap: 10 },
+  accordionList: { gap: 12 },
+  accordionSection: {
+    borderRadius: 16,
+  },
   categoryCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -782,16 +1049,12 @@ const styles = StyleSheet.create({
   categoryCardInfo: { flex: 1 },
   categoryCardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
   categoryCardDesc: { fontSize: 12 },
-  detailHeader: {
-    height: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  sectionBody: {
+    marginTop: 8,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  backButton: { paddingVertical: 6, paddingRight: 10 },
-  detailHeaderTitle: { fontSize: 16, fontWeight: '700' },
   sectionSubtitle: {
     fontSize: 11.5,
     fontWeight: '700',
@@ -891,24 +1154,33 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   slotCalcTimeText: { fontSize: 13, fontWeight: '700' },
-  colorConfigBlock: { marginBottom: 10 },
-  colorConfigHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  subItemCard: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: 6,
+    overflow: 'hidden',
   },
-  colorTypeTitle: { fontSize: 13, fontWeight: '600' },
-  currentColorBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  subItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  subItemTitle: { fontSize: 13.5, fontWeight: '600' },
+  colorPickerSubItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  currentColorBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
   currentColorHex: { fontSize: 11, fontWeight: '700', color: '#ffffff' },
   paletteScroll: { overflow: 'visible', marginHorizontal: -2 },
   paletteScrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    minWidth: '100%',
-    paddingVertical: 6,
-    paddingHorizontal: 2,
+    gap: 6,
+    paddingVertical: 4,
   },
   colorCircleWrapper: {
     width: 28,
@@ -920,6 +1192,12 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   colorCircleInner: { width: 20, height: 20, borderRadius: 10 },
+  systemBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  systemBadgeText: { fontSize: 11, fontWeight: '700' },
   versionPill: {
     paddingHorizontal: 6,
     paddingVertical: 2,

@@ -39,7 +39,7 @@ export interface ScheduleStoreV2 {
   calendarEvents: Record<string, Lesson[]>; // YYYY-MM-DD -> Lesson[]
 }
 
-const WEEKDAY_LETTERS = ['П', 'В', 'С', 'Ч', 'П', 'С', 'В'];
+const WEEKDAY_LETTERS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 const DAYS_FULL = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const MONTHS_UPPER = [
   'ЯНВАРЬ', 'ФЕВРАЛЬ', 'МАРТ', 'АПРЕЛЬ', 'МАЙ', 'ИЮНЬ',

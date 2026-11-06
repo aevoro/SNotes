@@ -23,6 +23,11 @@ import ScheduleScreen from './schedule';
 import CalendarScreen from './calendar';
 import SettingsScreen from './settings';
 
+const MemoizedNotesScreen = React.memo(NotesScreen);
+const MemoizedScheduleScreen = React.memo(ScheduleScreen);
+const MemoizedCalendarScreen = React.memo(CalendarScreen);
+const MemoizedSettingsScreen = React.memo(SettingsScreen);
+
 const appIcon = require('../../assets/images/snotes_icon.png');
 
 interface TabItemConfig {
@@ -115,9 +120,12 @@ export default function TabLayout() {
     setActiveIndex(index);
     Animated.spring(pageTranslateX, {
       toValue: -index * sw,
-      damping: 24,
-      stiffness: 220,
-      mass: 0.8,
+      damping: 28,
+      stiffness: 280,
+      mass: 0.6,
+      overshootClamping: true,
+      restDisplacementThreshold: 0.5,
+      restSpeedThreshold: 0.5,
       useNativeDriver: true,
     }).start();
   };
@@ -126,7 +134,7 @@ export default function TabLayout() {
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 12;
+        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5 && Math.abs(gestureState.dx) > 12;
       },
       onPanResponderMove: (_, gestureState) => {
         const sw = screenWidthRef.current;
@@ -144,14 +152,17 @@ export default function TabLayout() {
       },
       onPanResponderRelease: (_, gestureState) => {
         const currentIdx = activeIndexRef.current;
+        const dx = gestureState.dx;
+        const vx = gestureState.vx;
 
-        if (gestureState.dx < -SWIPE_THRESHOLD && currentIdx < 3) {
-          goToTabRef.current(currentIdx + 1);
-        } else if (gestureState.dx > SWIPE_THRESHOLD && currentIdx > 0) {
-          goToTabRef.current(currentIdx - 1);
-        } else {
-          goToTabRef.current(currentIdx);
+        let nextIdx = currentIdx;
+        if ((dx < -SWIPE_THRESHOLD || vx < -0.4) && currentIdx < 3) {
+          nextIdx = currentIdx + 1;
+        } else if ((dx > SWIPE_THRESHOLD || vx > 0.4) && currentIdx > 0) {
+          nextIdx = currentIdx - 1;
         }
+
+        goToTabRef.current(nextIdx);
       },
       onPanResponderTerminate: () => {
         goToTabRef.current(activeIndexRef.current);
@@ -184,17 +195,17 @@ export default function TabLayout() {
               transform: [{ translateX: pageTranslateX }],
             },
           ]}>
-          <View style={{ width: screenWidth, flex: 1 }}>
-            <NotesScreen />
+          <View style={{ width: screenWidth, flex: 1, overflow: 'hidden' }}>
+            <MemoizedNotesScreen />
           </View>
-          <View style={{ width: screenWidth, flex: 1 }}>
-            <ScheduleScreen />
+          <View style={{ width: screenWidth, flex: 1, overflow: 'hidden' }}>
+            <MemoizedScheduleScreen />
           </View>
-          <View style={{ width: screenWidth, flex: 1 }}>
-            <CalendarScreen />
+          <View style={{ width: screenWidth, flex: 1, overflow: 'hidden' }}>
+            <MemoizedCalendarScreen />
           </View>
-          <View style={{ width: screenWidth, flex: 1 }}>
-            <SettingsScreen />
+          <View style={{ width: screenWidth, flex: 1, overflow: 'hidden' }}>
+            <MemoizedSettingsScreen />
           </View>
         </Animated.View>
       </View>

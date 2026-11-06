@@ -15,6 +15,8 @@ export type CupertinoIconName =
   | 'checkmark'
   | 'folder'
   | 'folder-open'
+  | 'folder-add'
+  | 'folder-edit'
   | 'refresh'
   | 'download'
   | 'bell'
@@ -231,6 +233,45 @@ export const CupertinoIcon: React.FC<CupertinoIconProps> = ({
               strokeLinejoin="round"
               fill="none"
             />
+          </>
+        );
+
+      case 'folder-add':
+        return (
+          <>
+            <Path
+              d="M12 19H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v3"
+              stroke={color}
+              strokeWidth={stroke}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <Line x1="18" y1="14" x2="18" y2="20" stroke={color} strokeWidth={stroke * 1.1} strokeLinecap="round" />
+            <Line x1="15" y1="17" x2="21" y2="17" stroke={color} strokeWidth={stroke * 1.1} strokeLinecap="round" />
+          </>
+        );
+
+      case 'folder-edit':
+        return (
+          <>
+            <Path
+              d="M11 19H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v2"
+              stroke={color}
+              strokeWidth={stroke}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <Path
+              d="M15.5 19.5l4-4 2 2-4 4h-2v-2z"
+              stroke={color}
+              strokeWidth={stroke * 0.9}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <Line x1="18.5" y1="16.5" x2="20.5" y2="18.5" stroke={color} strokeWidth={stroke * 0.9} strokeLinecap="round" />
           </>
         );
 

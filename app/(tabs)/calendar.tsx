@@ -22,7 +22,7 @@ import { getCurrentWeekNumber } from '../../src/utils/scheduleUtils';
 import { CupertinoIcon } from '../../src/components/CupertinoIcon';
 import { ScheduleStoreV2 } from './schedule';
 
-const WEEKDAY_LETTERS = ['П', 'В', 'С', 'Ч', 'П', 'С', 'В'];
+const WEEKDAY_LETTERS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 const DAYS_FULL = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
 const MONTHS_UPPER = [
   'ЯНВАРЬ', 'ФЕВРАЛЬ', 'МАРТ', 'АПРЕЛЬ', 'МАЙ', 'ИЮНЬ',
@@ -532,10 +532,10 @@ export default function CalendarScreen() {
                       <Text
                         style={[
                           styles.itemTitle,
-                          { color: theme.textPrimary },
+                          { color: theme.textPrimary, flex: 1 },
                           todo.isCompleted && { textDecorationLine: 'line-through', color: theme.textMuted },
                         ]}
-                        numberOfLines={1}>
+                        numberOfLines={3}>
                         {todo.title}
                       </Text>
                     </TouchableOpacity>
@@ -570,7 +570,7 @@ export default function CalendarScreen() {
                     style={[styles.itemRow, { backgroundColor: theme.surfaceSolid, borderColor: theme.border }]}>
                     <CupertinoIcon name="calendar" size={15} color={eventMarkerColor} style={{ marginRight: 8 }} />
                     <View style={{ flex: 1, justifyContent: 'center' }}>
-                      <Text style={[styles.itemTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+                      <Text style={[styles.itemTitle, { color: theme.textPrimary }]} numberOfLines={3}>
                         {ev.subject}
                       </Text>
                       <Text style={[styles.itemSub, { color: theme.textSecondary }]} numberOfLines={1}>
@@ -605,7 +605,7 @@ export default function CalendarScreen() {
                       style={[styles.itemRow, { backgroundColor: theme.surfaceSolid, borderColor: theme.border }]}>
                       <CupertinoIcon name="document" size={14} color={theme.accent} style={{ marginRight: 8 }} />
                       <View style={{ flex: 1, justifyContent: 'center' }}>
-                        <Text style={[styles.itemTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+                        <Text style={[styles.itemTitle, { color: theme.textPrimary }]} numberOfLines={3}>
                           {note.title}
                         </Text>
                         {note.content ? (
@@ -856,8 +856,9 @@ const styles = StyleSheet.create({
   },
   weekdayColText: {
     textAlign: 'center',
-    fontSize: 14.5,
+    fontSize: 12.5,
     fontWeight: '700',
+    letterSpacing: 0.2,
     marginBottom: 6,
   },
   gridTable: {

@@ -11,7 +11,7 @@ export interface UpdateInfo {
   error?: string;
 }
 
-export const APP_VERSION = '2.0.2';
+export const APP_VERSION = '2.0.3';
 
 export const getInstalledAppVersion = (): string => {
   return APP_VERSION;

@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-v2.0.2-blue?style=flat-square" alt="Version 2.0.2" />
+  <img src="https://img.shields.io/badge/Version-v2.0.3-blue?style=flat-square" alt="Version 2.0.3" />
   <img src="https://img.shields.io/badge/Platform-Android%20%7C%20Web-green?style=flat-square&logo=android" alt="Platform Android & Web" />
   <img src="https://img.shields.io/badge/React_Native-Expo_v52-blue?style=flat-square&logo=react" alt="React Native Expo" />
   <img src="https://img.shields.io/badge/TypeScript-Strict-blue?style=flat-square&logo=typescript" alt="TypeScript" />

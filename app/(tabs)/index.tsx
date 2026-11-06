@@ -20,22 +20,26 @@ import { TodoItem } from '../../src/types/todo';
 import { AppFolder, FOLDER_COLORS, FOLDER_ICONS } from '../../src/types/folders';
 import { CupertinoIcon, CupertinoIconName } from '../../src/components/CupertinoIcon';
 import { ScrollableWithBar } from '../../src/components/ScrollableWithBar';
+import { DeadlineWheelPicker } from '../../src/components/DeadlineWheelPicker';
 
 type HubSegment = 'all' | 'notes' | 'todos';
 
 interface NoteCardItemProps {
   item: Note;
   theme: any;
+  folderColor?: string;
   onOpen: () => void;
   onTogglePin: () => void;
   onDelete: () => void;
 }
 
-function NoteCardItem({ item, theme, onOpen, onTogglePin, onDelete }: NoteCardItemProps) {
+function NoteCardItem({ item, theme, folderColor, onOpen, onTogglePin, onDelete }: NoteCardItemProps) {
   const dateStr = new Date(item.createdAt).toLocaleDateString('ru-RU', {
     day: 'numeric',
     month: 'short',
   });
+
+  const noteAccent = folderColor || theme.accent;
 
   return (
     <View
@@ -43,8 +47,10 @@ function NoteCardItem({ item, theme, onOpen, onTogglePin, onDelete }: NoteCardIt
         styles.card,
         {
           backgroundColor: theme.cardSolid,
-          borderColor: item.isPinned ? theme.accent : theme.border,
+          borderColor: item.isPinned ? noteAccent : theme.border,
           borderWidth: item.isPinned ? 1.5 : StyleSheet.hairlineWidth,
+          borderLeftWidth: folderColor ? 4 : (item.isPinned ? 1.5 : StyleSheet.hairlineWidth),
+          borderLeftColor: folderColor || (item.isPinned ? noteAccent : theme.border),
         },
       ]}>
       <TouchableOpacity
@@ -53,14 +59,14 @@ function NoteCardItem({ item, theme, onOpen, onTogglePin, onDelete }: NoteCardIt
         onPress={onOpen}
         accessibilityRole="button"
         accessibilityLabel={`Заметка: ${item.title}`}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <CupertinoIcon name="document" size={15} color={theme.accent} />
-          <Text style={[styles.title, { color: theme.textPrimary }]} numberOfLines={1}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+          <CupertinoIcon name="document" size={15} color={noteAccent} style={{ marginTop: 2 }} />
+          <Text style={[styles.title, { color: theme.textPrimary, flex: 1 }]} numberOfLines={3}>
             {item.title}
           </Text>
-          {item.isPinned && <CupertinoIcon name="pin-filled" size={12} color={theme.accent} />}
+          {item.isPinned && <CupertinoIcon name="pin-filled" size={12} color={noteAccent} style={{ marginTop: 3 }} />}
         </View>
-        <Text style={[styles.date, { color: theme.textSecondary }]}>{dateStr}</Text>
+        <Text style={[styles.date, { color: theme.textSecondary, marginLeft: 21 }]}>{dateStr}</Text>
       </TouchableOpacity>
 
       <View style={styles.cardRight}>
@@ -73,7 +79,7 @@ function NoteCardItem({ item, theme, onOpen, onTogglePin, onDelete }: NoteCardIt
           <CupertinoIcon
             name={item.isPinned ? 'pin-filled' : 'pin'}
             size={15}
-            color={item.isPinned ? theme.accent : theme.textMuted}
+            color={item.isPinned ? noteAccent : theme.textMuted}
           />
         </TouchableOpacity>
         <TouchableOpacity
@@ -147,21 +153,26 @@ function getDeadlineBadge(
 interface TodoCardItemProps {
   item: TodoItem;
   theme: any;
+  folderColor?: string;
   onOpen: () => void;
   onToggleComplete: () => void;
   onTogglePin: () => void;
   onDelete: () => void;
 }
 
-function TodoCardItem({ item, theme, onOpen, onToggleComplete, onTogglePin, onDelete }: TodoCardItemProps) {
+function TodoCardItem({ item, theme, folderColor, onOpen, onToggleComplete, onTogglePin, onDelete }: TodoCardItemProps) {
+  const todoAccent = folderColor || theme.accent;
+
   return (
     <View
       style={[
         styles.card,
         {
           backgroundColor: theme.cardSolid,
-          borderColor: item.isPinned ? theme.accent : theme.border,
+          borderColor: item.isPinned ? todoAccent : theme.border,
           borderWidth: item.isPinned ? 1.5 : StyleSheet.hairlineWidth,
+          borderLeftWidth: folderColor ? 4 : (item.isPinned ? 1.5 : StyleSheet.hairlineWidth),
+          borderLeftColor: folderColor || (item.isPinned ? todoAccent : theme.border),
         },
       ]}>
       <TouchableOpacity
@@ -169,8 +180,8 @@ function TodoCardItem({ item, theme, onOpen, onToggleComplete, onTogglePin, onDe
         hitSlop={8}
         style={[
           styles.checkbox,
-          { borderColor: item.isCompleted ? theme.accent : theme.border },
-          item.isCompleted && { backgroundColor: theme.accent },
+          { borderColor: item.isCompleted ? todoAccent : theme.border },
+          item.isCompleted && { backgroundColor: todoAccent },
         ]}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: item.isCompleted }}>
@@ -183,20 +194,20 @@ function TodoCardItem({ item, theme, onOpen, onToggleComplete, onTogglePin, onDe
         onPress={onOpen}
         accessibilityRole="button"
         accessibilityLabel={`Задача: ${item.title}`}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
           <Text
             style={[
               styles.title,
-              { color: theme.textPrimary },
+              { color: theme.textPrimary, flex: 1 },
               item.isCompleted && { textDecorationLine: 'line-through', color: theme.textSecondary },
             ]}
-            numberOfLines={1}>
+            numberOfLines={3}>
             {item.title}
           </Text>
-          {item.isPinned && <CupertinoIcon name="pin-filled" size={12} color={theme.accent} />}
+          {item.isPinned && <CupertinoIcon name="pin-filled" size={12} color={todoAccent} style={{ marginTop: 3 }} />}
         </View>
         {item.description ? (
-          <Text numberOfLines={1} style={[styles.todoDesc, { color: theme.textSecondary }]}>
+          <Text numberOfLines={2} style={[styles.todoDesc, { color: theme.textSecondary }]}>
             {item.description}
           </Text>
         ) : null}
@@ -218,7 +229,7 @@ function TodoCardItem({ item, theme, onOpen, onToggleComplete, onTogglePin, onDe
           <CupertinoIcon
             name={item.isPinned ? 'pin-filled' : 'pin'}
             size={15}
-            color={item.isPinned ? theme.accent : theme.textMuted}
+            color={item.isPinned ? todoAccent : theme.textMuted}
           />
         </TouchableOpacity>
         <TouchableOpacity
@@ -387,7 +398,7 @@ function FolderTreeNode({
               style={styles.iconBtn}
               accessibilityLabel="Создать подпапку"
               accessibilityRole="button">
-              <CupertinoIcon name="add" size={15} color={folderAccent} />
+              <CupertinoIcon name="folder-add" size={15} color={folderAccent} />
             </TouchableOpacity>
           )}
 
@@ -398,7 +409,7 @@ function FolderTreeNode({
               style={styles.iconBtn}
               accessibilityLabel="Редактировать папку"
               accessibilityRole="button">
-              <CupertinoIcon name="edit" size={13} color={theme.textMuted} />
+              <CupertinoIcon name="folder-edit" size={15} color={theme.textMuted} />
             </TouchableOpacity>
           )}
 
@@ -466,6 +477,7 @@ function FolderTreeNode({
                 key={n.id}
                 item={n}
                 theme={theme}
+                folderColor={folderAccent}
                 onOpen={() => onOpenNote(n)}
                 onTogglePin={() => onTogglePinNote(n.id)}
                 onDelete={() => onDeleteNote(n.id)}
@@ -479,6 +491,7 @@ function FolderTreeNode({
                 key={t.id}
                 item={t}
                 theme={theme}
+                folderColor={folderAccent}
                 onOpen={() => onOpenTodo(t)}
                 onToggleComplete={() => onToggleCompleteTodo(t.id)}
                 onTogglePin={() => onTogglePinTodo(t.id)}
@@ -881,29 +894,37 @@ export default function NotesHubScreen() {
                 </Text>
 
                 {activeSegment !== 'todos' &&
-                  unassignedNotes.map((note) => (
-                    <NoteCardItem
-                      key={note.id}
-                      item={note}
-                      theme={theme}
-                      onOpen={() => openEditNote(note)}
-                      onTogglePin={() => togglePinNote(note.id)}
-                      onDelete={() => handleDeleteNoteConfirm(note.id)}
-                    />
-                  ))}
+                  unassignedNotes.map((note) => {
+                    const noteFolder = note.folderId ? folders.find((f) => f.id === note.folderId) : undefined;
+                    return (
+                      <NoteCardItem
+                        key={note.id}
+                        item={note}
+                        theme={theme}
+                        folderColor={noteFolder?.color}
+                        onOpen={() => openEditNote(note)}
+                        onTogglePin={() => togglePinNote(note.id)}
+                        onDelete={() => handleDeleteNoteConfirm(note.id)}
+                      />
+                    );
+                  })}
 
                 {activeSegment !== 'notes' &&
-                  unassignedTodos.map((todo) => (
-                    <TodoCardItem
-                      key={todo.id}
-                      item={todo}
-                      theme={theme}
-                      onOpen={() => openEditTodo(todo)}
-                      onToggleComplete={() => toggleCompleteTodo(todo.id)}
-                      onTogglePin={() => togglePinTodo(todo.id)}
-                      onDelete={() => deleteTodo(todo.id)}
-                    />
-                  ))}
+                  unassignedTodos.map((todo) => {
+                    const todoFolder = todo.folderId ? folders.find((f) => f.id === todo.folderId) : undefined;
+                    return (
+                      <TodoCardItem
+                        key={todo.id}
+                        item={todo}
+                        theme={theme}
+                        folderColor={todoFolder?.color}
+                        onOpen={() => openEditTodo(todo)}
+                        onToggleComplete={() => toggleCompleteTodo(todo.id)}
+                        onTogglePin={() => togglePinTodo(todo.id)}
+                        onDelete={() => deleteTodo(todo.id)}
+                      />
+                    );
+                  })}
               </View>
             )}
           </>
@@ -1023,7 +1044,7 @@ export default function NotesHubScreen() {
           </View>
 
           <ScrollView contentContainerStyle={styles.noteContentScroll} keyboardShouldPersistTaps="handled">
-            <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Заголовок</Text>
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginBottom: 4 }]}>Заголовок</Text>
             <TextInput
               placeholder="Название заметки"
               placeholderTextColor={theme.textMuted}
@@ -1033,13 +1054,14 @@ export default function NotesHubScreen() {
               accessibilityLabel="Заголовок заметки"
             />
 
-            <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: 12 }]}>Текст заметки</Text>
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: 10, marginBottom: 4 }]}>Текст заметки</Text>
             <TextInput
               placeholder="Начните писать..."
               placeholderTextColor={theme.textMuted}
               value={noteContent}
               onChangeText={setNoteContent}
               multiline
+              textAlignVertical="top"
               style={[styles.noteContentInput, { color: theme.textPrimary }]}
               accessibilityLabel="Содержимое заметки"
             />
@@ -1175,41 +1197,12 @@ export default function NotesHubScreen() {
                     ))}
                   </View>
 
-                  {/* Stepper Date Row */}
-                  <View style={styles.stepperDateRow}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        const d = new Date(todoDeadlineDate);
-                        d.setDate(d.getDate() - 1);
-                        setTodoDeadlineDate(d);
-                      }}
-                      style={[styles.stepperBtn, { backgroundColor: theme.cardSolid, borderColor: theme.border }]}>
-                      <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700' }}>◀</Text>
-                    </TouchableOpacity>
-
-                    <View style={{ alignItems: 'center' }}>
-                      <Text style={{ fontSize: 13.5, fontWeight: '700', color: theme.textPrimary }}>
-                        {todoDeadlineDate.toLocaleDateString('ru-RU', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        })}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#ff9f0a', fontWeight: '600', marginTop: 1 }}>
-                        Появится в календаре на эту дату
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      onPress={() => {
-                        const d = new Date(todoDeadlineDate);
-                        d.setDate(d.getDate() + 1);
-                        setTodoDeadlineDate(d);
-                      }}
-                      style={[styles.stepperBtn, { backgroundColor: theme.cardSolid, borderColor: theme.border }]}>
-                      <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700' }}>▶</Text>
-                    </TouchableOpacity>
-                  </View>
+                  {/* Deadline Wheel Picker */}
+                  <DeadlineWheelPicker
+                    selectedDate={todoDeadlineDate}
+                    onDateChange={setTodoDeadlineDate}
+                    theme={theme}
+                  />
                 </View>
               )}
             </View>
@@ -1666,7 +1659,14 @@ const styles = StyleSheet.create({
   },
   noteContentScroll: { padding: 20 },
   noteTitleInput: { fontSize: 20, fontWeight: '700', paddingVertical: 4 },
-  noteContentInput: { fontSize: 15, lineHeight: 22, minHeight: 250, paddingVertical: 4 },
+  noteContentInput: {
+    fontSize: 15,
+    lineHeight: 22,
+    minHeight: 250,
+    paddingTop: 4,
+    paddingBottom: 8,
+    textAlignVertical: 'top',
+  },
 
   // Popups & Modal Sheets
   modalBackdrop: {
